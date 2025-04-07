@@ -14,7 +14,7 @@
 
 <img src="../out/sequence.svg" alt="Sequence Diagram" style="zoom:67%;" />
 
-### Requirements
+## Requirements
 
 - R1: UI
 
