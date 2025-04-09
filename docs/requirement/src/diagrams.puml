@@ -48,7 +48,7 @@ class Elevator {
     +closeDoor()
 }
 class ElevatorControl {
-    +requestElevator(from: Int, to: Int): Elevator
+    +requestElevator(from: Int, direction: Enum): Elevator
     +moveElevator(elevator: Elevator, to: Int)
 }
 
