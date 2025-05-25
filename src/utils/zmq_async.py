@@ -11,7 +11,7 @@ from rich.logging import RichHandler
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logging.basicConfig(
-    level="INFO",
+    level="DEBUG",
     format="%(message)s",
     datefmt="[%X]",
     handlers=[RichHandler()],
@@ -65,7 +65,7 @@ class Client(Base):
         self._socket = self._context.socket(zmq.DEALER)
         self._socket.setsockopt_string(zmq.IDENTITY, identity)
         self._socket.connect(f"tcp://{server_host}:{port}")
-        logger.info(f"Client connected to {server_host}:{port}, identity: {identity}")
+        logger.debug(f"Client connected to {server_host}:{port}, identity: {identity}")
 
     @property
     def identity(self):
@@ -87,7 +87,7 @@ class Client(Base):
 
                 timestamp = int(round(time.time() * 1000))
                 await self._receive_queue.put((message_str, timestamp))
-                logger.info(f'Server -> Client[{self.identity}]: "{message_str}"')
+                logger.debug(f'Server -> Client[{self.identity}]: "{message_str}"')
 
         except asyncio.CancelledError:
             pass
@@ -99,7 +99,7 @@ class Client(Base):
                     message = await self._send_queue.get()
                     self._send_queue.task_done()
                     await self._socket.send_string(message)
-                    logger.info(f'Client[{self.identity}] -> Server: "{message}"')
+                    logger.debug(f'Client[{self.identity}] -> Server: "{message}"')
                 else:
                     await asyncio.sleep(0)
         except asyncio.CancelledError:
@@ -113,7 +113,7 @@ class Server(Base):
 
         self._socket = self._context.socket(zmq.ROUTER)
         self._socket.bind(f"tcp://{server_host}:{server_port}")
-        logger.info(f"Server listening on port: {server_port}")
+        logger.debug(f"Server listening on port: {server_port}")
 
     async def get_first_client(self):
         while not self.clients_addr:
@@ -140,7 +140,7 @@ class Server(Base):
                 timestamp = int(round(time.time() * 1000))
                 await self._receive_queue.put((address, message, timestamp))
 
-                logger.info(f'Client[{address}] -> Server: "{message}"')
+                logger.debug(f'Client[{address}] -> Server: "{message}"')
         except asyncio.CancelledError:
             pass
 
@@ -152,7 +152,7 @@ class Server(Base):
                     self._send_queue.task_done()
                     await self._socket.send_multipart([address.encode(), data.encode()])
 
-                    logger.info(f'Server -> Client[{address}]: "{data}"')
+                    logger.debug(f'Server -> Client[{address}]: "{data}"')
 
                 else:
                     await asyncio.sleep(0)
