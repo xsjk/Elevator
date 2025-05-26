@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
         # Add reset button
         self.control_layout = QVBoxLayout()
         self.reset_button = QPushButton(QCoreApplication.translate("MainWindow", "Reset Elevator System"))
-        self.reset_button.clicked.connect(self.reset_system)
+        self.reset_button.clicked.connect(self.elevator_controller.reset)
         self.control_layout.addWidget(self.reset_button)
         self.control_layout.addStretch()
         self.content_layout.addLayout(self.control_layout)
@@ -128,10 +128,8 @@ class MainWindow(QMainWindow):
         """Toggle the visibility of the elevator visualizer"""
         self.elevator_visualizer.setVisible(self.visualizer_toggle.isChecked())
 
-    def reset_system(self):
+    def reset(self):
         """Reset the elevator system to its initial state"""
-        self.elevator_controller.reset()
-
         # Reset UI state
         for eid, panel in self.elevator_panels.items():
             panel.reset_internal_buttons()

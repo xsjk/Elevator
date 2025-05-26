@@ -1,12 +1,12 @@
+import asyncio
 import logging
 
 from PySide6.QtCore import QCoreApplication
 
-from controller import Controller, Config, Floor
+from controller import Config, Controller, Floor
 from gui.main_window import MainWindow
 from utils.common import Direction, DoorState, ElevatorId, Event
 from utils.event_bus import event_bus
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -93,3 +93,8 @@ class GUIController(Controller):
     async def control_loop(self):
         asyncio.create_task(self._update_position())
         return await super().control_loop()
+
+    def reset(self):
+        super().reset()
+        if self.main_window:
+            self.main_window.reset()
