@@ -52,7 +52,11 @@ class Controller:
 
         self.__post_init__()
 
-    def start(self, tg: asyncio.TaskGroup | None):
+        self.start()
+
+        logger.info("Elevator system has been reset")
+
+    def start(self, tg: asyncio.TaskGroup | None = None):
         self.task = (asyncio if tg is None else tg).create_task(self.control_loop())
 
     def stop(self):
@@ -74,8 +78,7 @@ class Controller:
 
     async def handle_message(self, message: str):
         if message == "reset":
-            self.__post_init__()
-            logger.info("Elevator system has been reset")
+            self.reset()
 
         elif message.startswith("call_up@") or message.startswith("call_down@"):
             direction = Direction.UP if message.startswith("call_up") else Direction.DOWN

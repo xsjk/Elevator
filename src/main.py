@@ -15,7 +15,7 @@ from utils.zmq_async import Client
 async def main():
     identity = "Group3"
     client = Client(identity=identity)
-    await client.start()
+    client.start()
 
     controller = GUIController()
     main_window = MainWindow(controller)
@@ -45,9 +45,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
     app = QApplication(sys.argv)
 
     gui.main_window.tm = TranslationManager(app)

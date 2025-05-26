@@ -41,11 +41,12 @@ class Base(ABC):
             raise TypeError("Socket must be an instance of zmq.asyncio.Socket")
         self._socket = value
 
-    async def start(self) -> None:
-        self._listen_task = asyncio.create_task(self._listen_for_messages())
-        self._send_task = asyncio.create_task(self._process_send_queue())
+    def start(self, tg: asyncio.TaskGroup | None = None) -> None:
+        e = asyncio if tg is None else tg
+        self._listen_task = e.create_task(self._listen_for_messages())
+        self._send_task = e.create_task(self._process_send_queue())
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         if self._listen_task:
             self._listen_task.cancel()
         if self._send_task:
@@ -188,7 +189,7 @@ if __name__ == "__main__":
                         except asyncio.CancelledError:
                             pass
 
-                    await server.start()
+                    server.start()
                     await message_echo_loop()
 
                 case "client":
@@ -212,7 +213,7 @@ if __name__ == "__main__":
                         except asyncio.CancelledError:
                             pass
 
-                    await client.start()
+                    client.start()
                     await asyncio.gather(process_client_messages(), send_messages())
 
         except asyncio.CancelledError:

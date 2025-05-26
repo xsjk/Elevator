@@ -128,7 +128,7 @@ async def testing(server: Server, client_addr: str):
 
 async def main():
     server = Server()
-    await server.start()
+    server.start()
 
     try:
         while True:
@@ -140,7 +140,7 @@ async def main():
     except asyncio.CancelledError:
         logger.info("Program cancelled")
     finally:
-        await server.stop()
+        server.stop()
 
 
 if __name__ == "__main__":

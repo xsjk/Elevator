@@ -23,19 +23,10 @@ class GUIController(Controller):
         # Subscribe to elevator events
         self._setup_event_handlers()
 
-    def __del__(self):
-        # Unsubscribe from elevator events
-        self._unsubscribe_event_handlers()
-
     def _setup_event_handlers(self):
         """Set up event handlers for elevator state changes"""
         event_bus.subscribe(Event.ELEVATOR_STATE_CHANGED, self._on_elevator_state_changed)
         event_bus.subscribe(Event.ELEVATOR_FLOOR_CHANGED, self._on_elevator_state_changed)
-
-    def _unsubscribe_event_handlers(self):
-        """Unsubscribe from elevator events"""
-        event_bus.unsubscribe(Event.ELEVATOR_STATE_CHANGED, self._on_elevator_state_changed)
-        event_bus.unsubscribe(Event.ELEVATOR_FLOOR_CHANGED, self._on_elevator_state_changed)
 
     def _on_elevator_state_changed(self, elevator_id: ElevatorId, floor: Floor, door_state: DoorState, direction: Direction):
         """Handle elevator state change events"""
