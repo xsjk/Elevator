@@ -55,5 +55,4 @@ if __name__ == "__main__":
 
     with QEventLoop(app) as event_loop:
         asyncio.set_event_loop(event_loop)
-        event_loop.create_task(main())
-        event_loop.run_forever()
+        event_loop.run_until_complete(main())

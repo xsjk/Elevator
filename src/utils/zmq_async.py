@@ -8,8 +8,6 @@ import zmq
 import zmq.asyncio
 from rich.logging import RichHandler
 
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 logging.basicConfig(
     level="DEBUG",
     format="%(message)s",
@@ -30,6 +28,18 @@ class Base(ABC):
     def __del__(self):
         if self._socket is not None:
             self._socket.setsockopt(zmq.LINGER, 0)
+
+    @property
+    def socket(self):
+        if self._socket is None:
+            raise RuntimeError("Socket is not initialized")
+        return self._socket
+
+    @socket.setter
+    def socket(self, value: zmq.asyncio.Socket):
+        if not isinstance(value, zmq.asyncio.Socket):
+            raise TypeError("Socket must be an instance of zmq.asyncio.Socket")
+        self._socket = value
 
     async def start(self) -> None:
         self._listen_task = asyncio.create_task(self._listen_for_messages())
@@ -62,14 +72,14 @@ class Client(Base):
     def __init__(self, server_host="127.0.0.1", port=27132, identity="GroupX"):
         super().__init__()
 
-        self._socket = self._context.socket(zmq.DEALER)
-        self._socket.setsockopt_string(zmq.IDENTITY, identity)
-        self._socket.connect(f"tcp://{server_host}:{port}")
+        self.socket = self._context.socket(zmq.DEALER)
+        self.socket.setsockopt_string(zmq.IDENTITY, identity)
+        self.socket.connect(f"tcp://{server_host}:{port}")
         logger.debug(f"Client connected to {server_host}:{port}, identity: {identity}")
 
     @property
     def identity(self):
-        return self._socket.getsockopt_string(zmq.IDENTITY)
+        return self.socket.getsockopt_string(zmq.IDENTITY)
 
     async def send(self, data):
         await self._send_queue.put(data)
@@ -82,7 +92,7 @@ class Client(Base):
     async def _listen_for_messages(self):
         try:
             while True:
-                message = await self._socket.recv()
+                message = await self.socket.recv()
                 message_str = message.decode()
 
                 timestamp = int(round(time.time() * 1000))
@@ -95,13 +105,10 @@ class Client(Base):
     async def _process_send_queue(self):
         try:
             while True:
-                if not self._send_queue.empty():
-                    message = await self._send_queue.get()
-                    self._send_queue.task_done()
-                    await self._socket.send_string(message)
-                    logger.debug(f'Client[{self.identity}] -> Server: "{message}"')
-                else:
-                    await asyncio.sleep(0)
+                message = await self._send_queue.get()
+                self._send_queue.task_done()
+                await self.socket.send_string(message)
+                logger.debug(f'Client[{self.identity}] -> Server: "{message}"')
         except asyncio.CancelledError:
             pass
 
@@ -112,8 +119,8 @@ class Server(Base):
         self.clients_addr = set()
         self.client_queue = asyncio.Queue(maxsize=100)
 
-        self._socket = self._context.socket(zmq.ROUTER)
-        self._socket.bind(f"tcp://{server_host}:{server_port}")
+        self.socket = self._context.socket(zmq.ROUTER)
+        self.socket.bind(f"tcp://{server_host}:{server_port}")
         logger.debug(f"Server listening on port: {server_port}")
 
     async def get_next_client(self):
@@ -130,7 +137,7 @@ class Server(Base):
     async def _listen_for_messages(self):
         try:
             while True:
-                address, message = await self._socket.recv_multipart()
+                address, message = await self.socket.recv_multipart()
                 address = address.decode()
                 message = message.decode()
 
@@ -148,15 +155,11 @@ class Server(Base):
     async def _process_send_queue(self):
         try:
             while True:
-                if not self._send_queue.empty():
-                    address, data = await self._send_queue.get()
-                    self._send_queue.task_done()
-                    await self._socket.send_multipart([address.encode(), data.encode()])
+                address, data = await self._send_queue.get()
+                self._send_queue.task_done()
+                await self.socket.send_multipart([address.encode(), data.encode()])
 
-                    logger.debug(f'Server -> Client[{address}]: "{data}"')
-
-                else:
-                    await asyncio.sleep(0)
+                logger.debug(f'Server -> Client[{address}]: "{data}"')
         except asyncio.CancelledError:
             pass
 

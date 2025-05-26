@@ -317,7 +317,8 @@ class ElevatorPanel(QFrame):
         layout.addStretch()
 
         # Register as observer for language changes
-        tm.add_observer(self)
+        if tm is not None:
+            tm.add_observer(self)
 
     def select_floor(self, floor):
         """Select a floor inside the elevator"""
