@@ -95,6 +95,7 @@ class TargetFloorChains:
         self.current_chain = TargetFloors(direction)
         self.next_chain = TargetFloors(-direction)
         self.future_chain = TargetFloors(direction)
+        self.swap_event = asyncio.Event()
 
     @property
     def direction(self) -> Direction:
@@ -115,6 +116,7 @@ class TargetFloorChains:
         Swap the current chain with the next chain and the next chain with the future chain.
         This is used when the current chain is empty and we need to move to the next chain.
         """
+        self.swap_event.set()
         self.current_chain, self.next_chain, self.future_chain = self.next_chain, self.future_chain, TargetFloors(self.direction)
 
     def pop(self) -> FloorAction:
@@ -145,12 +147,29 @@ class TargetFloorChains:
         return next(iter(self))
 
     async def get(self) -> FloorAction:
-        await self.current_chain.nonemptyEvent.wait()
-        assert len(self.current_chain) > 0
-        return self.current_chain[0]
+        while self.is_empty():
+            await asyncio.wait(
+                [
+                    asyncio.create_task(e.wait())
+                    for e in (
+                        self.current_chain.nonemptyEvent,
+                        self.next_chain.nonemptyEvent,
+                        self.future_chain.nonemptyEvent,
+                        self.swap_event,
+                    )
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # If swap_event is set, reset it and continue the loop
+            if self.swap_event.is_set():
+                self.swap_event.clear()
+                continue
+
+        return self.top()
 
     def is_empty(self) -> bool:
-        return self.current_chain.is_empty()
+        return len(self) == 0
 
     def clear(self):
         self.current_chain.clear()
