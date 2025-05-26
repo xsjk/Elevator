@@ -16,8 +16,8 @@ class GUIElevatorController(ElevatorController):
     Handles logging of commands to the console
     """
 
-    def __init__(self, client, main_window: MainWindow = None):
-        super().__init__(client, ElevatorControllerConfig())
+    def __init__(self, main_window: MainWindow | None = None):
+        super().__init__(ElevatorControllerConfig())
         self.main_window = main_window
 
         # Subscribe to elevator events
