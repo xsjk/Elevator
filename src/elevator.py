@@ -391,23 +391,30 @@ class Elevator:
                 else:
                     self.state = ElevatorState.STOPPED_DOOR_CLOSED
                     await self.commit_door(DoorDirection.OPEN)
-                    self.pop_target()
-                    msg = f"floor_arrived@{self.current_floor}#{self.id}"
-                    if self.target_floor_chains.is_empty():
-                        match direction:
-                            case Direction.IDLE:
-                                self.queue.put_nowait(msg)
-                            case Direction.UP:
+
+                    while True:
+                        self.pop_target()
+                        msg = f"floor_arrived@{self.current_floor}#{self.id}"
+                        if self.target_floor_chains.is_empty():
+                            match direction:
+                                case Direction.IDLE:
+                                    self.queue.put_nowait(msg)
+                                case Direction.UP:
+                                    self.queue.put_nowait(f"up_{msg}")
+                                case Direction.DOWN:
+                                    self.queue.put_nowait(f"down_{msg}")
+                            break
+                        else:
+                            target_floor, direction = self.target_floor_chains.top()
+                            if target_floor == self.current_floor:
+                                print(self.target_floor_chains)
+                                logger.warning(f"Target floor {target_floor} is the same as current floor {self.current_floor}, skipping")
+                                continue
+                            if target_floor > self.current_floor:
                                 self.queue.put_nowait(f"up_{msg}")
-                            case Direction.DOWN:
+                            else:  # target_floor < self.current_floor
                                 self.queue.put_nowait(f"down_{msg}")
-                    else:
-                        target_floor, direction = self.target_floor_chains.top()
-                        assert target_floor != self.current_floor
-                        if target_floor > self.current_floor:
-                            self.queue.put_nowait(f"up_{msg}")
-                        else:  # target_floor < self.current_floor
-                            self.queue.put_nowait(f"down_{msg}")
+                            break
 
                 self._moving_timestamp = None
 
@@ -538,7 +545,7 @@ class Elevator:
 
         # Publish event for state change
         if old_state != new_state:
-            event_bus.publish(Event.ELEVATOR_STATE_CHANGED, self.id, self.current_floor, self.door_state, self.commited_direction)
+            event_bus.publish(Event.ELEVATOR_STATE_CHANGED, self.id, self.current_floor, self.door_state, self.moving_direction)
 
     @property
     def current_floor(self) -> Floor:
@@ -553,7 +560,7 @@ class Elevator:
             logger.debug(f"Elevator {self.id} floor changed to {new_floor}")
 
             # Publish event for floor change
-            event_bus.publish(Event.ELEVATOR_FLOOR_CHANGED, self.id, self.current_floor, self.door_state, self.commited_direction)
+            event_bus.publish(Event.ELEVATOR_FLOOR_CHANGED, self.id, self.current_floor, self.door_state, self.moving_direction)
 
     @property
     def current_position(self) -> float:
