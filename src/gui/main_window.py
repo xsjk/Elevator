@@ -3,6 +3,7 @@ import logging
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QGridLayout,
@@ -56,6 +57,8 @@ class MainWindow(QMainWindow):
             index = self.language_selector.findText(tm.current_language)
             if index >= 0:
                 self.language_selector.setCurrentIndex(index)
+        else:
+            logging.warning("TranslationManager is not initialized or no available languages found.")
 
         self.language_selector.currentTextChanged.connect(self.change_language)
         self.language_layout.addStretch()
@@ -74,9 +77,16 @@ class MainWindow(QMainWindow):
         self.elevators_widget = QWidget()
         self.elevators_layout = QVBoxLayout(self.elevators_widget)
 
+        # Add visualizer toggle checkbox
+        self.visualizer_toggle = QCheckBox(QCoreApplication.translate("MainWindow", "Show Visualizer"))
+        self.visualizer_toggle.setChecked(False)  # Default to unchecked
+        self.visualizer_toggle.stateChanged.connect(self.toggle_visualizer)
+        self.language_layout.addWidget(self.visualizer_toggle)
+
         # Add visualizer with correct floor order (from bottom to top)
         self.elevator_visualizer = ElevatorVisualizer(floors=[Floor(s) for s in elevator_controller.config.floors])
         self.elevators_layout.addWidget(self.elevator_visualizer)
+        self.elevator_visualizer.setVisible(False)  # Initially hidden
 
         # Add elevator control panels
         elevator_panels_widget = QWidget()
@@ -112,7 +122,12 @@ class MainWindow(QMainWindow):
         self.content_layout.addLayout(self.control_layout)
 
         # Register as observer for language changes
-        tm.add_observer(self)
+        if tm is not None:
+            tm.add_observer(self)
+
+    def toggle_visualizer(self, state):
+        """Toggle the visibility of the elevator visualizer"""
+        self.elevator_visualizer.setVisible(self.visualizer_toggle.isChecked())
 
     def reset_system(self):
         """Reset the elevator system to its initial state"""
@@ -130,7 +145,8 @@ class MainWindow(QMainWindow):
 
     def change_language(self, language):
         logging.debug(f"Changing language to {language}")
-        tm.set_language(language)
+        if tm is not None:
+            tm.set_language(language)
 
     def update_language(self):
         logging.debug("Updating MainWindow language")
@@ -206,7 +222,8 @@ class BuildingPanel(QFrame):
         layout.addStretch()
 
         # Register as observer for language changes
-        tm.add_observer(self)
+        if tm is not None:
+            tm.add_observer(self)
 
     def call_elevator_up(self, floor):
         """Call elevator to go up from floor"""
