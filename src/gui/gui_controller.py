@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QCoreApplication
 
-from core import ElevatorController, ElevatorControllerConfig, Floor
+from controller import Controller, Config, Floor
 from gui.main_window import MainWindow
 from utils.common import Direction, DoorState, ElevatorId, Event
 from utils.event_bus import event_bus
@@ -10,14 +10,14 @@ from utils.event_bus import event_bus
 logger = logging.getLogger(__name__)
 
 
-class GUIElevatorController(ElevatorController):
+class GUIController(Controller):
     """
     Extended elevator controller that integrates with the GUI
     Handles logging of commands to the console
     """
 
     def __init__(self, main_window: MainWindow | None = None):
-        super().__init__(ElevatorControllerConfig())
+        super().__init__(Config())
         self.main_window = main_window
 
         # Subscribe to elevator events

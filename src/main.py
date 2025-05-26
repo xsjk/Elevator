@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
 import gui.main_window
-from gui.gui_controller import GUIElevatorController
+from gui.gui_controller import GUIController
 from gui.i18n import TranslationManager
 from gui.main_window import MainWindow
 from utils.zmq_async import Client
@@ -17,7 +17,7 @@ async def main():
     client = Client(identity=identity)
     await client.start()
 
-    controller = GUIElevatorController()
+    controller = GUIController()
     main_window = MainWindow(controller)
     controller.set_main_window(main_window)
     main_window.show()
@@ -29,13 +29,17 @@ async def main():
 
     async def output_loop():
         while True:
-            msg = await controller.queue.get()
+            msg = await controller.get_event_message()
             print(msg)
             await client.send(msg)
 
     await client.send(f"Client[{identity}] is online")
+
     try:
-        await asyncio.gather(input_loop(), output_loop())
+        async with asyncio.TaskGroup() as tg:
+            controller.start(tg)
+            tg.create_task(input_loop())
+            tg.create_task(output_loop())
     except asyncio.CancelledError:
         logging.info("Program cancelled")
 

@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core import ElevatorController
+from controller import Controller
 from gui.i18n import TranslationManager
 from gui.visualizer import ElevatorVisualizer
 from utils.common import Direction, DoorState, Floor
@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
     Contains building panel, elevator panels and console
     """
 
-    def __init__(self, elevator_controller: ElevatorController):
+    def __init__(self, elevator_controller: Controller):
         super().__init__()
         self.setWindowTitle(QCoreApplication.translate("MainWindow", "Elevator Control System"))
         self.setGeometry(100, 100, 900, 700)
@@ -144,7 +144,7 @@ class BuildingPanel(QFrame):
     Shows buttons to call elevators from each floor
     """
 
-    def __init__(self, elevator_controller: ElevatorController):
+    def __init__(self, elevator_controller: Controller):
         super().__init__()
         self.elevator_controller = elevator_controller
         self.setFrameShape(QFrame.Shape.Box)
@@ -234,7 +234,7 @@ class ElevatorPanel(QFrame):
     Contains floor selection buttons and door control
     """
 
-    def __init__(self, elevator_id, elevator_controller: ElevatorController):
+    def __init__(self, elevator_id, elevator_controller: Controller):
         super().__init__()
         self.elevator_id = elevator_id
         self.elevator_controller = elevator_controller

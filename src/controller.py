@@ -1,0 +1,177 @@
+import asyncio
+import logging
+from dataclasses import dataclass, field
+
+from elevator import Elevator
+from utils.common import (
+    Direction,
+    DoorDirection,
+    ElevatorId,
+    Floor,
+    FloorAction,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Config:
+    floor_travel_duration: float = 3.0  # Time for elevator to travel between floors when running at max speed
+    accelerate_duration: float = 1.0  # Time for elevator to accelerate (seconds)
+    door_move_duration: float = 1.0  # Time for elevator door to move (seconds)
+    door_stay_duration: float = 3.0  # Time elevator door remains open (seconds)
+    floors: tuple[str, ...] = ("-1", "1", "2", "3")  # Floors in the building
+    elevator_count: int = 2  # Number of elevators in the building
+
+
+@dataclass
+class Controller:
+    config: Config = field(default_factory=Config)
+    requests: set[FloorAction] = field(default_factory=set)  # External requests
+    queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue
+
+    def __post_init__(self):
+        self.elevators = {
+            i: Elevator(
+                id=i,
+                queue=self.queue,
+                floor_travel_duration=self.config.floor_travel_duration,
+                accelerate_duration=self.config.accelerate_duration,
+                door_move_duration=self.config.door_move_duration,
+                door_stay_duration=self.config.door_stay_duration,
+            )
+            for i in range(1, self.config.elevator_count + 1)
+        }
+
+    def reset(self):
+        self.stop()
+
+        # Empty the queue
+        while not self.queue.empty():
+            self.queue.get_nowait()
+
+        self.__post_init__()
+
+    def start(self, tg: asyncio.TaskGroup | None):
+        self.task = (asyncio if tg is None else tg).create_task(self.control_loop())
+
+    def stop(self):
+        if getattr(self, "task", None) is not None:
+            self.task.cancel()
+
+    async def control_loop(self):
+        try:
+            logger.debug("Control loop started")
+            async with asyncio.TaskGroup() as tg:
+                for e in self.elevators.values():
+                    tg.create_task(e.door_loop())
+                    tg.create_task(e.move_loop())
+        except asyncio.CancelledError:
+            logger.debug("Control loop cancelled")
+
+    def handle_message_task(self, message: str):
+        asyncio.create_task(self.handle_message(message))
+
+    async def handle_message(self, message: str):
+        if message == "reset":
+            self.__post_init__()
+            logger.info("Elevator system has been reset")
+
+        elif message.startswith("call_up@") or message.startswith("call_down@"):
+            direction = Direction.UP if message.startswith("call_up") else Direction.DOWN
+            floor = Floor(message.split("@")[1])
+            await self.call_elevator(floor, direction)
+
+        elif message.startswith("select_floor@"):
+            parts = message.split("@")[1].split("#")
+            floor = Floor(parts[0])
+            elevator_id = int(parts[1])
+            await self.select_floor(floor, elevator_id)
+
+        elif message.startswith("open_door#"):
+            elevator_id = int(message.split("#")[1])
+            elevator = self.elevators[elevator_id]
+            self.open_door(elevator)
+
+        elif message.startswith("close_door#"):
+            elevator_id = int(message.split("#")[1])
+            elevator = self.elevators[elevator_id]
+            self.close_door(elevator)
+
+    async def get_event_message(self):
+        return await self.queue.get()
+
+    def calculate_duration(self, n_floors: float, n_stops: int) -> float:
+        return n_floors * self.config.floor_travel_duration + n_stops * (self.config.door_move_duration * 2 + self.config.door_stay_duration)
+
+    def estimate_arrival_time(self, elevator: Elevator, target_floor: Floor, requested_direction: Direction) -> float:
+        logger.setLevel(logging.CRITICAL)
+        elevator = elevator.copy()
+        elevator.commit_floor(target_floor, requested_direction)
+        n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
+        duration = self.calculate_duration(n_floors, n_stops)
+        logger.setLevel(logging.DEBUG)
+        return duration
+
+    async def call_elevator(self, call_floor: Floor, call_direction: Direction):
+        assert isinstance(call_floor, Floor)
+        assert call_direction in (Direction.UP, Direction.DOWN)
+
+        # Check if the call direction is already requested
+        if (call_floor, call_direction) in self.requests:
+            logger.info(f"Floor {call_floor} already requested {call_direction.name.lower()}")
+            return
+
+        logger.info(f"Calling elevator: Floor {call_floor}, Direction {call_direction}")
+
+        # Choose the best elevator (always choose the one that takes the shorter arrival time)
+        elevator = min(self.elevators.values(), key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
+        directed_target_floor = FloorAction(call_floor, call_direction)
+        self.requests.add(directed_target_floor)
+        event = elevator.commit_floor(call_floor, call_direction)
+        await event.wait()
+        self.requests.remove(directed_target_floor)
+
+    async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
+        assert isinstance(floor, Floor)
+        assert isinstance(elevator_id, ElevatorId)
+
+        elevator = self.elevators[elevator_id]
+
+        # Check if the floor is already selected
+        if floor in elevator.selected_floors:
+            logger.info(f"Floor {floor} already selected for elevator {elevator_id}")
+            return
+
+        elevator.selected_floors.add(floor)
+        event = elevator.commit_floor(floor, Direction.IDLE)
+        await event.wait()
+        elevator.selected_floors.remove(floor)
+
+    def open_door(self, elevator: Elevator):
+        elevator.commit_door(DoorDirection.OPEN)
+
+    def close_door(self, elevator: Elevator):
+        elevator.commit_door(DoorDirection.CLOSE)
+
+
+if __name__ == "__main__":
+
+    async def main():
+        try:
+            async with asyncio.TaskGroup() as tg:
+                c = Controller()
+                c.start(tg)
+
+                await asyncio.sleep(1)
+                await c.handle_message("call_up@1")
+                await c.handle_message("call_down@2")
+
+                while True:
+                    msg = await c.get_event_message()
+                    logger.info(msg)
+
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(main())
