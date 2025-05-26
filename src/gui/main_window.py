@@ -1,27 +1,27 @@
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLayout,
-    QGridLayout,
-    QPushButton,
-    QTextEdit,
-    QLineEdit,
-    QLabel,
-    QFrame,
-    QSplitter,
-    QComboBox,
-)
-from PySide6.QtCore import Qt, QCoreApplication
-from PySide6.QtGui import QFont
-
 import logging
+
+from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from core import ElevatorController
 from gui.i18n import TranslationManager
 from gui.visualizer import ElevatorVisualizer
-from utils.common import Floor, DoorState, Direction
-from core import ElevatorController
-
+from utils.common import Direction, DoorState, Floor
 
 tm: TranslationManager | None = None
 
