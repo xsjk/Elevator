@@ -303,7 +303,6 @@ class Elevator:
         # arrive immediately if the elevator is already at the floor
         if target_direction == Direction.IDLE:  # same floor
             if requested_direction == self.target_floor_chains.direction:  # same direction
-                print(f"Elevator {self.id} already at floor {floor}, no need to move")
                 msg = f"floor_arrived@{self.current_floor}#{self.id}"
                 match requested_direction:
                     case Direction.UP:
@@ -496,7 +495,6 @@ class Elevator:
                         else:
                             target_floor, direction = self.target_floor_chains.top()
                             if target_floor == self.current_floor:
-                                print(self.target_floor_chains)
                                 logger.warning(f"Target floor {target_floor} is the same as current floor {self.current_floor}, skipping")
                                 continue
                             if target_floor > self.current_floor:
@@ -603,6 +601,8 @@ class Elevator:
             logger.debug(f"Elevator {self.id}: Door loop cancelled")
             pass
         finally:
+            if task is not None and not task.done():
+                task.cancel()
             self.door_loop_started = False
 
     @property

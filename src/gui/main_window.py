@@ -133,24 +133,17 @@ class MainWindow(QMainWindow):
         self.elevator_controller.reset()
 
         # Reset UI state
-        for panel in self.elevator_panels.values():
+        for eid, panel in self.elevator_panels.items():
             panel.reset_internal_buttons()
             # Determine initial floor from config, default to "1" if not available
             initial_floor_str = str(self.elevator_controller.config.default_floor)
             initial_floor = Floor(initial_floor_str)  # Convert to Floor enum object
             panel.update_elevator_status(initial_floor, DoorState.CLOSED, Direction.IDLE)
+            self.elevator_visualizer.update_elevator_status(eid, initial_floor, False, direction=Direction.IDLE)
 
         self.building_panel.reset_buttons()
 
         # Reset visualizer (if needed, or handled by controller events)
-        # Example:
-        # if self.elevator_visualizer.isVisible():
-        #     for panel in self.elevator_panels: # Use panel.elevator_id
-        #         elevator_id = panel.elevator_id
-        #         initial_floor_str_vis = self.elevator_controller.config.floors[0] if self.elevator_controller.config.floors else "1"
-        #         initial_floor_vis = Floor(initial_floor_str_vis)
-        #         # This is an example; actual visualizer update might differ
-        #         self.elevator_visualizer.update_elevator_position(elevator_id, initial_floor_vis, DoorState.CLOSED)
 
     def change_language(self, language):
         logging.debug(f"Changing language to {language}")

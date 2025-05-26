@@ -30,7 +30,6 @@ async def main():
     async def output_loop():
         while True:
             msg = await controller.get_event_message()
-            print(msg)
             await client.send(msg)
 
     await client.send(f"Client[{identity}] is online")

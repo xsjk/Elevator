@@ -109,18 +109,6 @@ class ElevatorVisualizer(QFrame):
 
         return positions
 
-    def _initialize_elevator_positions(self):
-        """Initialize elevator positions to their current floors"""
-        for elevator_id, elevator in self.elevators.items():
-            floor = elevator["current_floor"]
-            if floor in self.floor_positions:
-                elevator["current_position"] = self.floor_positions[floor]
-            else:
-                # Default to first floor if current floor is invalid
-                default_floor = "1"
-                if default_floor in self.floor_positions:
-                    elevator["current_position"] = self.floor_positions[default_floor]
-
     def update_elevator_status(self, elevator_id: ElevatorId, floor: Floor, door_open: bool, direction: Direction):
         """Update the state of an elevator"""
         if elevator_id not in self.elevators:
@@ -175,6 +163,8 @@ class ElevatorVisualizer(QFrame):
             painter.setPen(self.window_text_color)
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             painter.drawText(int(building_x - 40), int(y_pos + self.FLOOR_HEIGHT - 10), f"Floor {floor}")
+
+        self._draw_elevators_text(painter, width, height)
 
     def _draw_building(self, painter: QPainter, width, height):
         """Draw the building structure"""
@@ -262,6 +252,19 @@ class ElevatorVisualizer(QFrame):
                     if open_width > 0:
                         painter.setBrush(QBrush(self.door_open_color))
                         painter.drawRect(QRectF(x + 4 + door_width - left_door_offset, y + 4, open_width, door_height))
+
+    def _draw_elevators_text(self, painter, width, height):
+        """Draw the elevators"""
+        building_x = (width - self.BUILDING_WIDTH) / 2
+
+        # Calculate starting position for first elevator
+        elevator_start_x = building_x + (self.BUILDING_WIDTH - (len(self.elevators) * self.ELEVATOR_WIDTH + (len(self.elevators) - 1) * self.ELEVATOR_SPACING)) / 2
+
+        # Draw each elevator
+        for elevator_id, elevator in self.elevators.items():
+            # Calculate elevator position
+            x = elevator_start_x + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
+            y = elevator["current_position"]
 
             # Draw current floor
             text_rect = QRectF(x, y + self.ELEVATOR_HEIGHT, self.ELEVATOR_WIDTH, 20)
