@@ -110,24 +110,39 @@ class TargetFloorChains:
     def nonemptyEvent(self) -> asyncio.Event:
         return self.current_chain.nonemptyEvent
 
+    def _swap_chains(self):
+        """
+        Swap the current chain with the next chain and the next chain with the future chain.
+        This is used when the current chain is empty and we need to move to the next chain.
+        """
+        self.current_chain, self.next_chain, self.future_chain = self.next_chain, self.future_chain, TargetFloors(self.direction)
+
     def pop(self) -> FloorAction:
         if len(self.current_chain) > 0:
             a = self.current_chain.pop(0)
+
+            if a.direction != Direction.IDLE:
+                # do not swap the chains if the action is not IDLE
+                # this is to allow IDLE actions to be added to current_chain
+                return a
+
             if len(self) > 0:
                 while len(self.current_chain) == 0:
                     # If the current chain is empty, we need to swap the next and future chains
-                    self.current_chain = self.next_chain
-                    self.next_chain = self.future_chain
-                    self.future_chain = TargetFloors(self.direction)
+                    self._swap_chains()
             else:
                 self.direction = Direction.IDLE
             return a
+        elif len(self) > 0:
+            while len(self.current_chain) == 0:
+                # If the current chain is empty, we need to swap the next and future chains
+                self._swap_chains()
+            return self.pop()
+
         raise IndexError("No actions in the current chain")
 
     def top(self) -> FloorAction:
-        if len(self.current_chain) > 0:
-            return self.current_chain[0]
-        raise IndexError("No actions in the current chain")
+        return next(iter(self))
 
     async def get(self) -> FloorAction:
         await self.current_chain.nonemptyEvent.wait()
@@ -184,6 +199,18 @@ class Elevator:
     accelerate_duration: float = 1.0
     door_move_duration: float = 3.0
     door_stay_duration: float = 3.0
+
+    @property
+    def acccerate_distance(self) -> float:
+        return 0.5 / self.floor_travel_duration * self.accelerate_duration
+
+    @property
+    def max_speed(self) -> float:
+        return 1.0 / self.floor_travel_duration
+
+    @property
+    def acceleration(self) -> float:
+        return self.max_speed / self.accelerate_duration
 
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # the queue to put events in
     door_idle_event: asyncio.Event = field(default_factory=asyncio.Event)  # exclusive lock for move and door
@@ -243,7 +270,7 @@ class Elevator:
         if not self.move_loop_started:
             logger.warning(f"move_loop of elevator {self.id} was not started yet.")
 
-        logger.debug(f"Committing floor {floor} with direction {requested_direction.name}")
+        logger.debug(f"Elevator {self.id}: Committing floor {floor} with direction {requested_direction.name}")
 
         directed_floor = FloorAction(floor, requested_direction)
         if directed_floor in self.target_floor_chains:
@@ -254,6 +281,29 @@ class Elevator:
 
         target_direction = self.direction_to(floor)
 
+        # arrive immediately if the elevator is already at the floor
+        if target_direction == Direction.IDLE:  # same floor
+            if requested_direction == self.target_floor_chains.direction:  # same direction
+                print(f"Elevator {self.id} already at floor {floor}, no need to move")
+                msg = f"floor_arrived@{self.current_floor}#{self.id}"
+                match requested_direction:
+                    case Direction.UP:
+                        self.queue.put_nowait(f"up_{msg}")
+                    case Direction.DOWN:
+                        self.queue.put_nowait(f"down_{msg}")
+                    case Direction.IDLE:
+                        self.queue.put_nowait(msg)
+
+                e = asyncio.Event()
+
+                async def open_door():
+                    await self.commit_door(DoorDirection.OPEN)
+                    e.set()
+
+                asyncio.create_task(open_door())
+                return e
+
+        # Determine the chain to add the action to and process later in the move_loop
         match self.target_floor_chains.direction:
             case Direction.IDLE:
                 # Use the current chain
@@ -283,7 +333,7 @@ class Elevator:
 
         # Add the action to the chain
         chain.add(floor, requested_direction)
-        logger.debug(self.target_floor_chains)
+        logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
 
         self.events[directed_floor] = asyncio.Event()
         return self.events[directed_floor]
@@ -326,18 +376,41 @@ class Elevator:
         Returns:
             float: Estimated time in seconds until the door is fully closed.
         """
+        duration: float = 0.0
         if self._door_last_state_change_time is None:
-            return 0.0
+            return duration
         passed = asyncio.get_event_loop().time() - self._door_last_state_change_time
 
-        duration: float = 0.0
         match self.state:
-            case ElevatorState.STOPPED_DOOR_OPENED:
-                duration = self.door_stay_duration - passed
             case ElevatorState.OPENING_DOOR:
                 duration = self.door_move_duration - passed + self.door_stay_duration + self.door_move_duration
+            case ElevatorState.STOPPED_DOOR_OPENED:
+                duration = self.door_stay_duration - passed + self.door_move_duration
             case ElevatorState.CLOSING_DOOR:
                 duration = self.door_move_duration - passed
+        if duration < 0:
+            duration = 0.0
+        return duration
+
+    def estimate_door_open_time(self) -> float:
+        """
+        Estimate the time until the door fully opened (including the stay duration).
+
+        Returns:
+            float: Estimated time in seconds until the door is fully closed.
+        """
+        duration: float = self.door_move_duration + self.door_stay_duration + self.door_move_duration
+        if self._door_last_state_change_time is None:
+            return duration
+        passed = asyncio.get_event_loop().time() - self._door_last_state_change_time
+
+        match self.state:
+            case ElevatorState.OPENING_DOOR:
+                duration = self.door_move_duration - passed + self.door_stay_duration
+            case ElevatorState.STOPPED_DOOR_OPENED:
+                duration = self.door_stay_duration - passed
+            case ElevatorState.CLOSING_DOOR:
+                duration = passed + self.door_stay_duration
         if duration < 0:
             duration = 0.0
         return duration
@@ -352,8 +425,8 @@ class Elevator:
         directed_floor = self.target_floor_chains.pop()
         event = self.events.pop(directed_floor)
         event.set()
-        logger.debug(f"Action popped: {directed_floor}")
-        logger.debug(self.target_floor_chains)
+        logger.debug(f"Elevator {self.id}: Action popped: {directed_floor}")
+        logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
         return directed_floor
 
     async def move_loop(self):
@@ -366,9 +439,6 @@ class Elevator:
         try:
             self.move_loop_started = True
             while True:
-                # Wait the elevator to be idle so that it can move
-                logger.debug("Wait for target floor chains")
-
                 # Wait for the door not open or moving
                 await self.door_idle_event.wait()
 
@@ -420,7 +490,7 @@ class Elevator:
 
                 # Signal that the floor as arrived
         except asyncio.CancelledError:
-            logger.debug("Move loop cancelled")
+            logger.debug("Elevator {self.id}: Move loop cancelled")
             pass
 
         finally:
@@ -443,7 +513,11 @@ class Elevator:
                 await close_door()
 
             except asyncio.CancelledError:
-                logger.debug("Door stay duration cancelled")
+                match self.state:
+                    case ElevatorState.OPENING_DOOR:
+                        logger.debug(f"Elevator {self.id}: Door opening cancelled")
+                    case ElevatorState.STOPPED_DOOR_OPENED:
+                        logger.debug(f"Elevator {self.id}: Door stay cancelled")
 
         async def close_door(duration=self.door_move_duration):
             try:
@@ -463,19 +537,14 @@ class Elevator:
                 assert self.door_idle_event.is_set()
 
             except asyncio.CancelledError:
-                logger.debug("Door closing cancelled")
+                logger.debug(f"Elevator {self.id}: Door closing cancelled")
 
         task: asyncio.Task | None = None
 
         try:
             self.door_loop_started = True
             while True:
-                # TODO: Implement door state commit
-                # 1. Door opening cannot be interrupted by door close
-                # 2. Door closing can be interrupted by door open
-                # 3. Door cannot commit when the elevator is moving
-
-                logger.debug("Wait for door action queue")
+                logger.debug(f"Elevator {self.id}: Wait for door action queue")
                 action = await self.door_action_queue.get()
                 match self.state:
                     case ElevatorState.MOVING_UP | ElevatorState.MOVING_DOWN:
@@ -512,7 +581,7 @@ class Elevator:
                 self.door_action_processed.set()
 
         except asyncio.CancelledError:
-            logger.debug("Door loop cancelled")
+            logger.debug(f"Elevator {self.id}: Door loop cancelled")
             pass
         finally:
             self.door_loop_started = False
@@ -607,8 +676,6 @@ class Elevator:
 
     @property
     def commited_direction(self) -> Direction:
-        if self.target_floor_chains.is_empty():
-            return Direction.IDLE
         return self.target_floor_chains.direction
 
 
@@ -622,8 +689,10 @@ if __name__ == "__main__":
                 tg.create_task(e.door_loop())
 
                 await asyncio.sleep(1)
-                e.commit_floor(Floor("3"), Direction.IDLE)
-                e.commit_floor(Floor("1"), Direction.UP)
+                e.commit_floor(Floor("-1"), Direction.UP)
+                e.commit_floor(Floor("2"), Direction.DOWN)
+                await asyncio.sleep(1.5)
+                e.commit_floor(Floor("1"), Direction.IDLE)
                 e.commit_floor(Floor("-1"), Direction.UP)
 
                 while True:

@@ -67,6 +67,9 @@ class ElevatorState(IntEnum):
     def is_door_open(self) -> bool:
         return self.get_door_state().is_open()
 
+    def is_moving(self) -> bool:
+        return self in (ElevatorState.MOVING_UP, ElevatorState.MOVING_DOWN)
+
 
 class Floor(int):
     def __new__(cls, value: str | int) -> Self:

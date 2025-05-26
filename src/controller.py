@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from elevator import Elevator
+from elevator import Elevator, logger
 from utils.common import (
     Direction,
     DoorDirection,
@@ -11,13 +11,11 @@ from utils.common import (
     FloorAction,
 )
 
-logger = logging.getLogger(__name__)
-
 
 @dataclass
 class Config:
     floor_travel_duration: float = 3.0  # Time for elevator to travel between floors when running at max speed
-    accelerate_duration: float = 1.0  # Time for elevator to accelerate (seconds)
+    accelerate_duration: float = 3.0  # Time for elevator to accelerate (seconds)
     door_move_duration: float = 1.0  # Time for elevator door to move (seconds)
     door_stay_duration: float = 3.0  # Time elevator door remains open (seconds)
     floors: tuple[str, ...] = ("-1", "1", "2", "3")  # Floors in the building
@@ -111,8 +109,16 @@ class Controller:
         logger.setLevel(logging.CRITICAL)
         elevator = elevator.copy()
         elevator.commit_floor(target_floor, requested_direction)
+
+        if elevator.state.is_moving():
+            duration = elevator.door_move_duration + elevator.door_stay_duration
+        elif target_floor == elevator.current_floor and elevator.commited_direction == requested_direction:
+            return elevator.estimate_door_open_time()
+        else:
+            duration = elevator.estimate_door_close_time() + elevator.door_move_duration + elevator.door_stay_duration
+
         n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
-        duration = elevator.estimate_door_close_time() + self.calculate_duration(n_floors, n_stops)
+        duration += self.calculate_duration(n_floors, n_stops)
         logger.setLevel(logging.DEBUG)
         return duration
 
@@ -125,7 +131,7 @@ class Controller:
             logger.info(f"Floor {call_floor} already requested {call_direction.name.lower()}")
             return
 
-        logger.info(f"Calling elevator: Floor {call_floor}, Direction {call_direction}")
+        logger.info(f"Calling elevator: Floor {call_floor}, Direction {call_direction.name.lower()}")
 
         # Choose the best elevator (always choose the one that takes the shorter arrival time)
         elevator = min(self.elevators.values(), key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
