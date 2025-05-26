@@ -204,12 +204,13 @@ class Elevator:
     events: dict[FloorAction, asyncio.Event] = field(default_factory=dict)
 
     _moving_timestamp: float | None = None  # Timestamp when movement starts
-    _door_last_action_start: float | None = None  # Timestamp when door movement starts
+    _door_last_state_change_time: float | None = None  # Timestamp when door movement starts
 
     door_loop_started: bool = False
     move_loop_started: bool = False
 
     door_action_queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Queue for actions to be executed
+    door_action_processed: asyncio.Event = field(default_factory=asyncio.Event)
 
     def __post_init__(self):
         self.door_idle_event.set()
@@ -221,11 +222,12 @@ class Elevator:
         c.door_action_queue = asyncio.Queue()
         return c
 
-    def commit_door(self, door_state: DoorDirection):
+    async def commit_door(self, door_state: DoorDirection):
         if not self.door_loop_started:
             logger.warning(f"door_loop of elevator {self.id} was not started yet.")
-
         self.door_action_queue.put_nowait(door_state)  # the queue is consumed at door_loop
+        self.door_action_processed.clear()
+        await self.door_action_processed.wait()
 
     def commit_floor(self, floor: Floor, requested_direction: Direction = Direction.IDLE) -> asyncio.Event:
         """
@@ -317,6 +319,29 @@ class Elevator:
 
         return n_floors, n_stops
 
+    def estimate_door_close_time(self) -> float:
+        """
+        Estimate the time until the door finally closes.
+
+        Returns:
+            float: Estimated time in seconds until the door is fully closed.
+        """
+        if self._door_last_state_change_time is None:
+            return 0.0
+        passed = asyncio.get_event_loop().time() - self._door_last_state_change_time
+
+        duration: float = 0.0
+        match self.state:
+            case ElevatorState.STOPPED_DOOR_OPENED:
+                duration = self.door_stay_duration - passed
+            case ElevatorState.OPENING_DOOR:
+                duration = self.door_move_duration - passed + self.door_stay_duration + self.door_move_duration
+            case ElevatorState.CLOSING_DOOR:
+                duration = self.door_move_duration - passed
+        if duration < 0:
+            duration = 0.0
+        return duration
+
     def pop_target(self) -> FloorAction:
         """
         Pop the next action from the elevator's list of target floors.
@@ -365,8 +390,7 @@ class Elevator:
                     self.current_floor -= 1
                 else:
                     self.state = ElevatorState.STOPPED_DOOR_CLOSED
-                    self.door_idle_event.clear()
-                    self.commit_door(DoorDirection.OPEN)
+                    await self.commit_door(DoorDirection.OPEN)
                     self.pop_target()
                     msg = f"floor_arrived@{self.current_floor}#{self.id}"
                     if self.target_floor_chains.is_empty():
@@ -397,36 +421,42 @@ class Elevator:
             pass
 
     async def door_loop(self):
-        async def door_task(duration=self.door_move_duration):
-            assert not self.door_idle_event.is_set()
-
-            self.state = ElevatorState.OPENING_DOOR
-            self._door_last_action_start = asyncio.get_event_loop().time() - (self.door_move_duration - duration)
-            await asyncio.sleep(duration)
-            self.state = ElevatorState.STOPPED_DOOR_OPENED
-            self.queue.put_nowait(f"door_opened#{self.id}")
+        async def open_door(duration=self.door_move_duration):
             try:
+                assert not self.door_idle_event.is_set()
+
+                self.state = ElevatorState.OPENING_DOOR
+                self._door_last_state_change_time = asyncio.get_event_loop().time() - (self.door_move_duration - duration)
+                await asyncio.sleep(duration)
+                self.state = ElevatorState.STOPPED_DOOR_OPENED
+                self._door_last_state_change_time = asyncio.get_event_loop().time()
+                self.queue.put_nowait(f"door_opened#{self.id}")
+
                 await asyncio.sleep(self.door_stay_duration)
+                await close_door()
+
             except asyncio.CancelledError:
                 logger.debug("Door stay duration cancelled")
 
-            # Close door
-            assert not self.door_idle_event.is_set()
-
-            self.state = ElevatorState.CLOSING_DOOR
-            self._door_last_action_start = asyncio.get_event_loop().time()
+        async def close_door(duration=self.door_move_duration):
             try:
+                # Close door
+                assert not self.door_idle_event.is_set()
+
+                self.state = ElevatorState.CLOSING_DOOR
+                self._door_last_state_change_time = asyncio.get_event_loop().time()
+
                 await asyncio.sleep(duration)
+
+                self.state = ElevatorState.STOPPED_DOOR_CLOSED
+                self.queue.put_nowait(f"door_closed#{self.id}")
+
+                # notify the move_loop
+                self.door_idle_event.set()
+                assert self.door_idle_event.is_set()
+
             except asyncio.CancelledError:
                 logger.debug("Door closing cancelled")
-                return
-
-            self.state = ElevatorState.STOPPED_DOOR_CLOSED
-            self.queue.put_nowait(f"door_closed#{self.id}")
-
-            # notify the move_loop
-            self.door_idle_event.set()
-            assert self.door_idle_event.is_set()
 
         task: asyncio.Task | None = None
 
@@ -448,26 +478,31 @@ class Elevator:
                     case ElevatorState.STOPPED_DOOR_CLOSED:
                         if action == DoorDirection.OPEN:
                             self.door_idle_event.clear()
-                            task = asyncio.create_task(door_task())
+                            task = asyncio.create_task(open_door())
                     case ElevatorState.CLOSING_DOOR:
                         assert task is not None
-                        assert self._door_last_action_start is not None
+                        assert self._door_last_state_change_time is not None
 
                         if action == DoorDirection.OPEN:
                             task.cancel()
                             await task
                             assert task.cancelled() or task.done()
-                            duration = asyncio.get_event_loop().time() - self._door_last_action_start
+                            duration = asyncio.get_event_loop().time() - self._door_last_state_change_time
                             logger.info(f"Door closing is interrupted after {duration}")
 
                             self.door_idle_event.clear()
-                            task = asyncio.create_task(door_task(duration))
+                            task = asyncio.create_task(open_door(duration))
 
                     case ElevatorState.STOPPED_DOOR_OPENED:
                         assert task is not None
                         if action == DoorDirection.CLOSE:
                             assert not self.door_idle_event.is_set()
-                            task.cancel()  # cancel the stay duration if it is running, the door will automatically start to close
+                            task.cancel()  # cancel the stay duration if it is running
+                            await task
+                            assert task.cancelled() or task.done()
+                            task = asyncio.create_task(close_door())
+
+                self.door_action_processed.set()
 
         except asyncio.CancelledError:
             logger.debug("Door loop cancelled")
@@ -551,21 +586,17 @@ class Elevator:
             case ElevatorState.STOPPED_DOOR_OPENED:
                 return 1.0
             case ElevatorState.OPENING_DOOR:
-                assert self._door_last_action_start is not None
-                return (asyncio.get_event_loop().time() - self._door_last_action_start) / self.door_move_duration
+                assert self._door_last_state_change_time is not None
+                return (asyncio.get_event_loop().time() - self._door_last_state_change_time) / self.door_move_duration
             case ElevatorState.CLOSING_DOOR:
-                assert self._door_last_action_start is not None
-                return 1.0 - (asyncio.get_event_loop().time() - self._door_last_action_start) / self.door_move_duration
+                assert self._door_last_state_change_time is not None
+                return 1.0 - (asyncio.get_event_loop().time() - self._door_last_state_change_time) / self.door_move_duration
             case ElevatorState.STOPPED_DOOR_CLOSED | ElevatorState.MOVING_UP | ElevatorState.MOVING_DOWN:
                 return 0.0
 
     @property
     def door_state(self) -> DoorState:
         return self.state.get_door_state()
-
-    @door_state.setter
-    def door_state(self, new_state: DoorState):
-        raise NotImplementedError("Door state cannot be set directly.")
 
     @property
     def commited_direction(self) -> Direction:

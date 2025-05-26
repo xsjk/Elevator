@@ -91,12 +91,12 @@ class Controller:
         elif message.startswith("open_door#"):
             elevator_id = int(message.split("#")[1])
             elevator = self.elevators[elevator_id]
-            self.open_door(elevator)
+            await self.open_door(elevator)
 
         elif message.startswith("close_door#"):
             elevator_id = int(message.split("#")[1])
             elevator = self.elevators[elevator_id]
-            self.close_door(elevator)
+            await self.close_door(elevator)
 
     async def get_event_message(self):
         return await self.queue.get()
@@ -109,7 +109,7 @@ class Controller:
         elevator = elevator.copy()
         elevator.commit_floor(target_floor, requested_direction)
         n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
-        duration = self.calculate_duration(n_floors, n_stops)
+        duration = elevator.estimate_door_close_time() + self.calculate_duration(n_floors, n_stops)
         logger.setLevel(logging.DEBUG)
         return duration
 
@@ -126,6 +126,7 @@ class Controller:
 
         # Choose the best elevator (always choose the one that takes the shorter arrival time)
         elevator = min(self.elevators.values(), key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
+        logger.info(f"Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
         directed_target_floor = FloorAction(call_floor, call_direction)
         self.requests.add(directed_target_floor)
         event = elevator.commit_floor(call_floor, call_direction)
@@ -148,11 +149,11 @@ class Controller:
         await event.wait()
         elevator.selected_floors.remove(floor)
 
-    def open_door(self, elevator: Elevator):
-        elevator.commit_door(DoorDirection.OPEN)
+    async def open_door(self, elevator: Elevator):
+        await elevator.commit_door(DoorDirection.OPEN)
 
-    def close_door(self, elevator: Elevator):
-        elevator.commit_door(DoorDirection.CLOSE)
+    async def close_door(self, elevator: Elevator):
+        await elevator.commit_door(DoorDirection.CLOSE)
 
 
 if __name__ == "__main__":
