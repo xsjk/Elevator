@@ -7,9 +7,11 @@ from utils.common import (
     Direction,
     DoorDirection,
     ElevatorId,
+    Event,
     Floor,
     FloorAction,
 )
+from utils.event_bus import event_bus
 
 
 @dataclass
@@ -19,6 +21,7 @@ class Config:
     door_move_duration: float = 1.0  # Time for elevator door to move (seconds)
     door_stay_duration: float = 3.0  # Time elevator door remains open (seconds)
     floors: tuple[str, ...] = ("-1", "1", "2", "3")  # Floors in the building
+    default_floor: Floor = Floor("1")  # Default floor to start from
     elevator_count: int = 2  # Number of elevators in the building
 
 
@@ -48,6 +51,10 @@ class Controller:
         while not self.queue.empty():
             self.queue.get_nowait()
 
+        # Clear requests
+        self.requests.clear()
+
+        # Reset elevators
         self.__post_init__()
 
         self.start()
@@ -99,7 +106,7 @@ class Controller:
             elevator = self.elevators[elevator_id]
             await self.close_door(elevator)
 
-    async def get_event_message(self):
+    async def get_event_message(self) -> str:
         return await self.queue.get()
 
     def calculate_duration(self, n_floors: float, n_stops: int) -> float:
@@ -141,6 +148,7 @@ class Controller:
         event = elevator.commit_floor(call_floor, call_direction)
         await event.wait()
         self.requests.remove(directed_target_floor)
+        event_bus.publish(Event.CALL_COMPLETED, call_floor, call_direction)
 
     async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
         assert isinstance(floor, Floor)
@@ -157,6 +165,7 @@ class Controller:
         event = elevator.commit_floor(floor, Direction.IDLE)
         await event.wait()
         elevator.selected_floors.remove(floor)
+        event_bus.publish(Event.FLOOR_ARRIVED, floor, elevator_id)
 
     async def open_door(self, elevator: Elevator):
         await elevator.commit_door(DoorDirection.OPEN)

@@ -107,7 +107,6 @@ class ElevatorVisualizer(QFrame):
             # Position is measured from the top of the widget
             positions[floor] = total_height - (i + 1) * self.FLOOR_HEIGHT
 
-        logging.debug(f"Floor positions: {positions}")
         return positions
 
     def _initialize_elevator_positions(self):

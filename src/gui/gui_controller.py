@@ -27,6 +27,8 @@ class GUIController(Controller):
         """Set up event handlers for elevator state changes"""
         event_bus.subscribe(Event.ELEVATOR_STATE_CHANGED, self._on_elevator_state_changed)
         event_bus.subscribe(Event.ELEVATOR_FLOOR_CHANGED, self._on_elevator_state_changed)
+        event_bus.subscribe(Event.CALL_COMPLETED, self._on_call_completed)
+        event_bus.subscribe(Event.FLOOR_ARRIVED, self._on_floor_arrived)
 
     def _on_elevator_state_changed(self, elevator_id: ElevatorId, floor: Floor, door_state: DoorState, direction: Direction):
         """Handle elevator state change events"""
@@ -34,11 +36,7 @@ class GUIController(Controller):
             return
 
         try:
-            if elevator_id == 1:
-                self.main_window.elevator_panels[0].update_elevator_status(floor, door_state, direction)
-            elif elevator_id == 2:
-                self.main_window.elevator_panels[1].update_elevator_status(floor, door_state, direction)
-
+            self.main_window.elevator_panels[elevator_id].update_elevator_status(floor, door_state, direction)
             # Update parent window's visualizer if available
             if hasattr(self.main_window, "elevator_visualizer"):
                 self.main_window.elevator_visualizer.update_elevator_status(elevator_id, floor, door_open=door_state.is_open(), direction=direction)
@@ -47,6 +45,14 @@ class GUIController(Controller):
         except Exception as e:
             logging.error(f"Error updating elevator UI: {e}")
             raise e
+
+    def _on_call_completed(self, floor: Floor, direction: Direction):
+        if self.main_window:
+            self.main_window.building_panel.clear_call_button(floor, direction)
+
+    def _on_floor_arrived(self, floor: Floor, elevator_id: ElevatorId):
+        if self.main_window:
+            self.main_window.elevator_panels[elevator_id].clear_floor_button(str(floor))
 
     def set_main_window(self, main_window: MainWindow):
         """Set the main window reference for UI updates"""

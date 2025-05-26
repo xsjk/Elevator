@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLayout,
     QLineEdit,
     QMainWindow,
     QPushButton,
@@ -79,21 +78,21 @@ class MainWindow(QMainWindow):
 
         # Add visualizer toggle checkbox
         self.visualizer_toggle = QCheckBox(QCoreApplication.translate("MainWindow", "Show Visualizer"))
-        self.visualizer_toggle.setChecked(False)  # Default to unchecked
+        self.visualizer_toggle.setChecked(True)  # Default to checked
         self.visualizer_toggle.stateChanged.connect(self.toggle_visualizer)
         self.language_layout.addWidget(self.visualizer_toggle)
 
         # Add visualizer with correct floor order (from bottom to top)
         self.elevator_visualizer = ElevatorVisualizer(floors=[Floor(s) for s in elevator_controller.config.floors])
         self.elevators_layout.addWidget(self.elevator_visualizer)
-        self.elevator_visualizer.setVisible(False)  # Initially hidden
+        self.elevator_visualizer.setVisible(True)  # Initially visible if toggle is checked
 
         # Add elevator control panels
         elevator_panels_widget = QWidget()
         elevator_panels_layout = QHBoxLayout(elevator_panels_widget)
-        self.elevator_panels = [ElevatorPanel(i, self.elevator_controller) for i in (1, 2)]
-        elevator_panels_layout.addWidget(self.elevator_panels[0])
+        self.elevator_panels = {i: ElevatorPanel(i, self.elevator_controller) for i in (1, 2)}
         elevator_panels_layout.addWidget(self.elevator_panels[1])
+        elevator_panels_layout.addWidget(self.elevator_panels[2])
         self.elevators_layout.addWidget(elevator_panels_widget)
 
         # Create console
@@ -131,17 +130,27 @@ class MainWindow(QMainWindow):
 
     def reset_system(self):
         """Reset the elevator system to its initial state"""
-        self.elevator_controller.handle_message_task("reset")
+        self.elevator_controller.reset()
 
-        # TODO: Reset UI state
-        # # Reset UI state
-        # self.elevator_panels[0].update_elevator_status(1)
-        # self.elevator_panels[1].update_elevator_status(2)
-        # self.building_panel.reset_buttons()
+        # Reset UI state
+        for panel in self.elevator_panels.values():
+            panel.reset_internal_buttons()
+            # Determine initial floor from config, default to "1" if not available
+            initial_floor_str = str(self.elevator_controller.config.default_floor)
+            initial_floor = Floor(initial_floor_str)  # Convert to Floor enum object
+            panel.update_elevator_status(initial_floor, DoorState.CLOSED, Direction.IDLE)
 
-        # # Reset visualizer
-        # self.elevator_visualizer.update_elevator_status(1, Floor("1"))
-        # self.elevator_visualizer.update_elevator_status(2, Floor("1"))
+        self.building_panel.reset_buttons()
+
+        # Reset visualizer (if needed, or handled by controller events)
+        # Example:
+        # if self.elevator_visualizer.isVisible():
+        #     for panel in self.elevator_panels: # Use panel.elevator_id
+        #         elevator_id = panel.elevator_id
+        #         initial_floor_str_vis = self.elevator_controller.config.floors[0] if self.elevator_controller.config.floors else "1"
+        #         initial_floor_vis = Floor(initial_floor_str_vis)
+        #         # This is an example; actual visualizer update might differ
+        #         self.elevator_visualizer.update_elevator_position(elevator_id, initial_floor_vis, DoorState.CLOSED)
 
     def change_language(self, language):
         logging.debug(f"Changing language to {language}")
@@ -174,68 +183,90 @@ class BuildingPanel(QFrame):
         self.title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         layout.addWidget(self.title)
 
-        # Floor list, arranged from top to bottom
-        self.floors = self.elevator_controller.config.floors[::-1]
+        # Floor list (strings) from config, arranged from top to bottom
+        self.floors_config = self.elevator_controller.config.floors[::-1]
 
         self.floor_widgets = {}
         self.floor_labels = {}
+        self.up_buttons = {}  # Store up call buttons, keyed by floor string
+        self.down_buttons = {}  # Store down call buttons, keyed by floor string
 
         # Create buttons for each floor
-        for floor in self.floors:
+        for floor_str in self.floors_config:  # Iterate over floor strings from config
             floor_widget = QWidget()
             floor_layout = QHBoxLayout(floor_widget)
 
-            floor_label = QLabel(f"{floor} {QCoreApplication.translate('BuildingPanel', 'Floor')}")
-            self.floor_labels[floor] = floor_label
+            # Use simple string formatting for QLabel to avoid f-string complexity with translate
+            label_text = f"{floor_str} {QCoreApplication.translate('BuildingPanel', 'Floor')}"
+            floor_label = QLabel(label_text)
+            self.floor_labels[floor_str] = floor_label
             floor_layout.addWidget(floor_label)
 
             button_layout = QVBoxLayout()
 
             # Add up button (except for top floor)
-            if floor != self.floors[0]:  # Top floor
+            if floor_str != self.floors_config[0]:  # Top floor
                 up_button = QPushButton("↑")
                 up_button.setFixedSize(40, 40)
-                up_button.clicked.connect(lambda checked, f=floor: self.call_elevator_up(f))
+                up_button.setCheckable(True)  # Make button checkable
+                up_button.clicked.connect(lambda checked, f_str=floor_str: self.call_elevator_up(f_str))
                 button_layout.addWidget(up_button)
-            else:
-                # Placeholder
+                self.up_buttons[floor_str] = up_button
+            else:  # Placeholder for top floor (no up button)
                 spacer = QWidget()
                 spacer.setFixedSize(40, 40)
                 button_layout.addWidget(spacer)
 
             # Add down button (except for bottom floor)
-            if floor != self.floors[-1]:
+            if floor_str != self.floors_config[-1]:  # Bottom floor
                 down_button = QPushButton("↓")
                 down_button.setFixedSize(40, 40)
-                down_button.clicked.connect(lambda checked, f=floor: self.call_elevator_down(f))
+                down_button.setCheckable(True)  # Make button checkable
+                down_button.clicked.connect(lambda checked, f_str=floor_str: self.call_elevator_down(f_str))
                 button_layout.addWidget(down_button)
-            else:
-                # Placeholder
+                self.down_buttons[floor_str] = down_button
+            else:  # Placeholder for bottom floor (no down button)
                 spacer = QWidget()
                 spacer.setFixedSize(40, 40)
                 button_layout.addWidget(spacer)
 
             floor_layout.addLayout(button_layout)
             layout.addWidget(floor_widget)
-            self.floor_widgets[floor] = floor_widget
+            self.floor_widgets[floor_str] = floor_widget
 
         layout.addStretch()
 
-        # Register as observer for language changes
         if tm is not None:
             tm.add_observer(self)
 
-    def call_elevator_up(self, floor):
-        """Call elevator to go up from floor"""
-        self.elevator_controller.handle_message_task(f"call_up@{floor}")
+    def call_elevator_up(self, floor_str: str):
+        # Call elevator to go up from floor_str (string)
+        self.elevator_controller.handle_message_task(f"call_up@{floor_str}")
+        if floor_str in self.up_buttons:
+            self.up_buttons[floor_str].setChecked(True)  # Keep button pressed
 
-    def call_elevator_down(self, floor):
-        """Call elevator to go down from floor"""
-        self.elevator_controller.handle_message_task(f"call_down@{floor}")
+    def call_elevator_down(self, floor_str: str):
+        # Call elevator to go down from floor_str (string)
+        self.elevator_controller.handle_message_task(f"call_down@{floor_str}")
+        if floor_str in self.down_buttons:
+            self.down_buttons[floor_str].setChecked(True)  # Keep button pressed
+
+    def clear_call_button(self, floor: Floor, direction: Direction):
+        # Clear a specific call button when the request is serviced
+        # floor: Floor enum object
+        # direction: Direction enum object
+        floor_str = str(floor)  # Convert Floor enum to string for key lookup
+        if direction == Direction.UP and floor_str in self.up_buttons:
+            self.up_buttons[floor_str].setChecked(False)
+        elif direction == Direction.DOWN and floor_str in self.down_buttons:
+            self.down_buttons[floor_str].setChecked(False)
 
     def reset_buttons(self):
-        """Reset button states"""
-        pass
+        # Reset all call button states
+        for button in self.up_buttons.values():
+            button.setChecked(False)
+        for button in self.down_buttons.values():
+            button.setChecked(False)
 
     def update_language(self):
         """Update UI text when language changes"""
@@ -260,13 +291,11 @@ class ElevatorPanel(QFrame):
 
         layout = QVBoxLayout(self)
 
-        # Elevator title
         self.title = QLabel(f"{QCoreApplication.translate('ElevatorPanel', 'Elevator')} #{elevator_id}")
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         layout.addWidget(self.title)
 
-        # Elevator status display
         self.status_frame = QFrame()
         self.status_frame.setFrameShape(QFrame.Shape.Panel)
         self.status_frame.setMinimumHeight(60)
@@ -279,29 +308,25 @@ class ElevatorPanel(QFrame):
         status_layout.addWidget(self.floor_label)
         status_layout.addWidget(self.door_label)
         status_layout.addWidget(self.direction_label)
-
-        layout: QLayout = layout
         layout.addWidget(self.status_frame)
 
-        # Floor buttons
         button_frame = QFrame()
         button_layout = QGridLayout(button_frame)
 
-        self.floor_buttons = {}
+        self.floor_buttons: dict[str, QPushButton] = {}
 
-        # Button layout as 2x2 grid
+        # Ensure floor_positions keys are strings
         floor_positions = {"3": (0, 0), "2": (0, 1), "1": (1, 0), "-1": (1, 1)}
 
-        for floor, pos in floor_positions.items():
-            button = QPushButton(floor)
+        for floor_str, pos in floor_positions.items():
+            button = QPushButton(floor_str)
             button.setFixedSize(50, 50)
-            button.clicked.connect(lambda checked, f=floor: self.select_floor(f))
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked, f_str=floor_str: self.select_floor(f_str))
             button_layout.addWidget(button, pos[0], pos[1])
-            self.floor_buttons[floor] = button
-
+            self.floor_buttons[floor_str] = button
         layout.addWidget(button_frame)
 
-        # Door control buttons
         door_frame = QWidget()
         door_layout = QHBoxLayout(door_frame)
 
@@ -312,17 +337,17 @@ class ElevatorPanel(QFrame):
         self.close_door_button = QPushButton(QCoreApplication.translate("ElevatorPanel", "Close Door"))
         self.close_door_button.clicked.connect(self.close_door)
         door_layout.addWidget(self.close_door_button)
-
         layout.addWidget(door_frame)
+
         layout.addStretch()
 
-        # Register as observer for language changes
         if tm is not None:
             tm.add_observer(self)
 
-    def select_floor(self, floor):
-        """Select a floor inside the elevator"""
-        self.elevator_controller.handle_message_task(f"select_floor@{floor}#{self.elevator_id}")
+    def select_floor(self, floor_str: str):
+        # floor_str is the string representation of the floor
+        self.elevator_controller.handle_message_task(f"select_floor@{floor_str}#{self.elevator_id}")
+        self.floor_buttons[floor_str].setChecked(True)
 
     def open_door(self):
         """Open elevator door"""
@@ -333,18 +358,27 @@ class ElevatorPanel(QFrame):
         self.elevator_controller.handle_message_task(f"close_door#{self.elevator_id}")
 
     def update_elevator_status(self, floor: Floor, door_state: DoorState, direction: Direction):
-        """Update elevator status display"""
-        assert isinstance(floor, Floor)
-        assert isinstance(door_state, DoorState)
-        assert isinstance(direction, Direction)
+        assert isinstance(floor, Floor), f"Expected Floor type, got {type(floor)}"
+        assert isinstance(door_state, DoorState), f"Expected DoorState type, got {type(door_state)}"
+        assert isinstance(direction, Direction), f"Expected Direction type, got {type(direction)}"
 
-        self.floor_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Current Floor:')} {floor}")
+        current_floor_str = str(floor)
+        self.floor_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Current Floor:')} {current_floor_str}")
 
-        door_text = QCoreApplication.translate("ElevatorPanel", door_state.name.capitalize())
+        door_text_key = door_state.name.capitalize()
+        door_text = QCoreApplication.translate("ElevatorPanel", door_text_key)
         self.door_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Door:')} {door_text}")
 
-        direction_text = QCoreApplication.translate("ElevatorPanel", direction.name.capitalize())
+        direction_text_key = direction.name.capitalize()
+        direction_text = QCoreApplication.translate("ElevatorPanel", direction_text_key)
         self.direction_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Direction:')} {direction_text}")
+
+    def clear_floor_button(self, floor_str: str):
+        self.floor_buttons[floor_str].setChecked(False)
+
+    def reset_internal_buttons(self):
+        for floor_str in self.floor_buttons:
+            self.floor_buttons[floor_str].setChecked(False)
 
     def update_language(self):
         """Update UI text when language changes"""
@@ -390,8 +424,8 @@ class ConsoleWidget(QFrame):
 
         layout.addLayout(input_layout)
 
-        # Register as observer for language changes
-        tm.add_observer(self)
+        if tm is not None:  # Check if tm is initialized
+            tm.add_observer(self)
 
     def execute_command(self):
         """Execute a command from the console input"""

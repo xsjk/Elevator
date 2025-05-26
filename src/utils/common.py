@@ -6,6 +6,8 @@ class Event(IntEnum):
     ELEVATOR_STATE_CHANGED = auto()
     ELEVATOR_FLOOR_CHANGED = auto()
     ELEVATOR_UPDATED = auto()  # visualizer should subscribe to this event to animate elevator movement and door opening/closing
+    CALL_COMPLETED = auto()
+    FLOOR_ARRIVED = auto()
 
 
 class Direction(IntEnum):
