@@ -22,13 +22,13 @@ logger = logging.getLogger(__name__)
 class Base(ABC):
     def __init__(self):
         self._context = zmq.asyncio.Context()
-        self._socket: zmq.Socket = None
+        self._socket: zmq.asyncio.Socket | None = None
 
         self._send_queue = asyncio.Queue()
         self._receive_queue = asyncio.Queue()
 
     def __del__(self):
-        if self._socket:
+        if self._socket is not None:
             self._socket.setsockopt(zmq.LINGER, 0)
 
     async def start(self) -> None:
@@ -110,15 +110,14 @@ class Server(Base):
     def __init__(self, server_host="127.0.0.1", server_port=27132):
         super().__init__()
         self.clients_addr = set()
+        self.client_queue = asyncio.Queue(maxsize=100)
 
         self._socket = self._context.socket(zmq.ROUTER)
         self._socket.bind(f"tcp://{server_host}:{server_port}")
         logger.debug(f"Server listening on port: {server_port}")
 
-    async def get_first_client(self):
-        while not self.clients_addr:
-            await asyncio.sleep(0.1)
-        return next(iter(self.clients_addr))
+    async def get_next_client(self):
+        return await self.client_queue.get()
 
     async def send(self, address, data):
         await self._send_queue.put((address, data))
@@ -135,7 +134,9 @@ class Server(Base):
                 address = address.decode()
                 message = message.decode()
 
-                self.clients_addr.add(address)
+                if address not in self.clients_addr:
+                    self.clients_addr.add(address)
+                    await self.client_queue.put(address)
 
                 timestamp = int(round(time.time() * 1000))
                 await self._receive_queue.put((address, message, timestamp))

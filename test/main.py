@@ -39,7 +39,7 @@ class Passenger:
         self.matching_signal = f"up_floor_arrived@{self.current_floor}" if self.direction == "up" else f"down_floor_arrived@{self.current_floor}"
         self.state = PassengerState.OUT_ELEVATOR_0_AT_OTHER_FLOOR
 
-    def change_state(self, target_state: PassengerState) -> str:
+    def change_state(self, target_state: PassengerState):
         self.state = target_state
 
     def is_finished(self):
@@ -52,9 +52,9 @@ class Passenger:
         return self._elevator_code
 
 
-async def testing(server: Server):
+async def testing(server: Server, client_addr: str):
     ############ Initialize Passengers ############
-    passengers = [Passenger(1, 3, "A")]  # There can be many passengers in testcase.
+    passengers = [Passenger(1, 3, "A"), Passenger(2, 1, "B")]  # There can be many passengers in testcase.
     timeStamp = -1  # default time stamp is -1
     clientMessage = ""  # default received message is ""
     count = 0
@@ -72,6 +72,8 @@ async def testing(server: Server):
     ############ Passenger timed automata ############
     while True:
         address, clientMessage, timeStamp = await server.read()
+        if address != client_addr:
+            continue
         for passenger in passengers:
             match passenger.state:
                 case PassengerState.IN_ELEVATOR_1_AT_OTHER_FLOOR:
@@ -117,8 +119,10 @@ async def testing(server: Server):
                         count += 1
 
         if count == len(passengers):
-            logger.info("Test passed: All passengers have reached their target floors!")
+            logger.info("PASSED: ALL PASSENGERS HAS ARRIVED AT THE TARGET FLOOR!")
+            await asyncio.sleep(1)
             await server.send(bindedClient, "reset")
+            server.clients_addr.remove(address)
             break
 
 
@@ -128,10 +132,10 @@ async def main():
 
     try:
         while True:
-            addr = await server.get_first_client()
+            addr = await server.get_next_client()
             user_input = await ainput(f"Start testing for {addr}? (y/n)\n")
             if user_input.lower() == "y":
-                await testing(server)
+                await testing(server, addr)
 
     except asyncio.CancelledError:
         logger.info("Program cancelled")
