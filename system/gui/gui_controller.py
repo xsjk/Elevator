@@ -66,14 +66,6 @@ class GUIController(Controller):
         except asyncio.CancelledError:
             pass
 
-    def set_main_window(self, main_window: MainWindow):
-        """Set the main window reference for UI updates"""
-        self.window = main_window
-
-        # Initialize UI with current elevator states
-        for elevator_id, elevator in self.elevators.items():
-            self._on_elevator_state_changed(elevator_id, elevator.current_floor, elevator.door_state, elevator.commited_direction)
-
     async def handle_message(self, message: str):
         """
         Handle incoming messages and log them to the console
@@ -89,7 +81,7 @@ class GUIController(Controller):
 
     async def control_loop(self):
         asyncio.create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
-        return await super().control_loop()
+        await super().control_loop()
 
     def reset(self):
         super().reset()
@@ -109,3 +101,7 @@ class GUIController(Controller):
     async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
         self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(True)
         return await super().select_floor(floor, elevator_id)
+
+    async def deselect_floor(self, floor: Floor, elevator_id: ElevatorId):
+        self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(False)
+        return await super().deselect_floor(floor, elevator_id)

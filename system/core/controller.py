@@ -31,7 +31,7 @@ class Controller:
     config: Config = field(default_factory=Config)
     requests: set[FloorAction] = field(default_factory=set)  # External requests
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue
-    message_tasks: list = field(default_factory=list)
+    message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
 
     def __post_init__(self):
         self.elevators = {
@@ -69,7 +69,7 @@ class Controller:
     def stop(self):
         if getattr(self, "control_task", None) is not None:
             self.control_task.cancel()
-        for t in self.message_tasks:
+        for t in self.message_tasks.values():
             t.cancel()
         self.message_tasks.clear()
 
@@ -84,7 +84,7 @@ class Controller:
             logger.debug("Controller: Control loop cancelled")
 
     def handle_message_task(self, message: str):
-        self.message_tasks.append(asyncio.create_task(self.handle_message(message), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}"))
+        self.message_tasks[message] = asyncio.create_task(self.handle_message(message), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}")
 
     async def handle_message(self, message: str):
         try:
@@ -111,6 +111,15 @@ class Controller:
                 elevator_id = int(message.split("#")[1])
                 elevator = self.elevators[elevator_id]
                 await self.close_door(elevator)
+
+            elif message.startswith("deselect_floor@"):
+                parts = message.split("@")[1].split("#")
+                floor = Floor(parts[0])
+                elevator_id = int(parts[1])
+                await self.deselect_floor(floor, elevator_id)
+
+            else:
+                logger.warning(f"Controller: Unrecognized message '{message}'")
 
         except asyncio.CancelledError:
             pass
@@ -170,11 +179,37 @@ class Controller:
             logger.info(f"Controller: Floor {floor} already selected for elevator {elevator_id}")
             return
 
-        elevator.selected_floors.add(floor)
-        event = elevator.commit_floor(floor, Direction.IDLE)
-        await event.wait()
-        elevator.selected_floors.remove(floor)
-        event_bus.publish(Event.FLOOR_ARRIVED, floor, elevator_id)
+        try:
+            elevator.selected_floors.add(floor)
+            event = elevator.commit_floor(floor, Direction.IDLE)
+            await event.wait()
+            event_bus.publish(Event.FLOOR_ARRIVED, floor, elevator_id)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            elevator.selected_floors.remove(floor)
+
+    async def deselect_floor(self, floor: Floor, elevator_id: ElevatorId):
+        assert isinstance(floor, Floor)
+        assert isinstance(elevator_id, ElevatorId)
+
+        elevator = self.elevators[elevator_id]
+
+        # Check if the floor is already selected
+        key = f"select_floor@{floor}#{elevator_id}"
+        assert floor in elevator.selected_floors
+        assert key in self.message_tasks
+
+        # Cancel the task associated with the floor selection and wait for it to finishs
+        t = self.message_tasks[key]
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+        assert floor not in elevator.selected_floors
+
+        elevator.cancel_commit(floor, Direction.IDLE)
 
     async def open_door(self, elevator: Elevator):
         await elevator.commit_door(DoorDirection.OPEN)

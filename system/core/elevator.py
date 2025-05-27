@@ -493,11 +493,21 @@ class Elevator:
                     # TODO trigger animation
                     await asyncio.sleep(self.floor_travel_duration)
                     self.current_floor += 1
+
+                    if self.target_floor_chains.is_empty():
+                        # target floor deselected
+                        self.state = ElevatorState.STOPPED_DOOR_CLOSED
+
                 elif self.current_floor > target_floor:
                     self.state = ElevatorState.MOVING_DOWN
                     # TODO trigger animation
                     await asyncio.sleep(self.floor_travel_duration)
                     self.current_floor -= 1
+
+                    if self.target_floor_chains.is_empty():
+                        # target floor deselected
+                        self.state = ElevatorState.STOPPED_DOOR_CLOSED
+
                 else:
                     self.state = ElevatorState.STOPPED_DOOR_CLOSED
                     await self.commit_door(DoorDirection.OPEN)

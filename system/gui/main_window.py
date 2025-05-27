@@ -301,7 +301,7 @@ class ElevatorPanel(QFrame):
             button = QPushButton(floor_str)
             button.setFixedSize(50, 50)
             button.setCheckable(True)
-            button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"select_floor@{f_str}#{self.elevator_id}"))
+            button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'select_floor' if checked else 'deselect_floor'}@{f_str}#{self.elevator_id}"))
             button_layout.addWidget(button, pos[0], pos[1])
             self.floor_buttons[floor_str] = button
         layout.addWidget(button_frame)
