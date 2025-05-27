@@ -177,10 +177,10 @@ class BuildingPanel(QFrame):
         # Floor list (strings) from config, arranged from top to bottom
         self.floors_config = self.elevator_controller.config.floors[::-1]
 
-        self.floor_widgets = {}
-        self.floor_labels = {}
-        self.up_buttons = {}  # Store up call buttons, keyed by floor string
-        self.down_buttons = {}  # Store down call buttons, keyed by floor string
+        self.floor_widgets: dict[str, QWidget] = {}
+        self.floor_labels: dict[str, QLabel] = {}
+        self.up_buttons: dict[str, QPushButton] = {}  # Store up call buttons, keyed by floor string
+        self.down_buttons: dict[str, QPushButton] = {}  # Store down call buttons, keyed by floor string
 
         # Create buttons for each floor
         for floor_str in self.floors_config:  # Iterate over floor strings from config
@@ -200,7 +200,7 @@ class BuildingPanel(QFrame):
                 up_button = QPushButton("↑")
                 up_button.setFixedSize(40, 40)
                 up_button.setCheckable(True)  # Make button checkable
-                up_button.clicked.connect(lambda checked, f_str=floor_str: self.call_elevator_up(f_str))
+                up_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"call_up@{f_str}"))
                 button_layout.addWidget(up_button)
                 self.up_buttons[floor_str] = up_button
             else:  # Placeholder for top floor (no up button)
@@ -213,7 +213,7 @@ class BuildingPanel(QFrame):
                 down_button = QPushButton("↓")
                 down_button.setFixedSize(40, 40)
                 down_button.setCheckable(True)  # Make button checkable
-                down_button.clicked.connect(lambda checked, f_str=floor_str: self.call_elevator_down(f_str))
+                down_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"call_down@{f_str}"))
                 button_layout.addWidget(down_button)
                 self.down_buttons[floor_str] = down_button
             else:  # Placeholder for bottom floor (no down button)
@@ -229,18 +229,6 @@ class BuildingPanel(QFrame):
 
         if tm is not None:
             tm.add_observer(self)
-
-    def call_elevator_up(self, floor_str: str):
-        # Call elevator to go up from floor_str (string)
-        self.elevator_controller.handle_message_task(f"call_up@{floor_str}")
-        if floor_str in self.up_buttons:
-            self.up_buttons[floor_str].setChecked(True)  # Keep button pressed
-
-    def call_elevator_down(self, floor_str: str):
-        # Call elevator to go down from floor_str (string)
-        self.elevator_controller.handle_message_task(f"call_down@{floor_str}")
-        if floor_str in self.down_buttons:
-            self.down_buttons[floor_str].setChecked(True)  # Keep button pressed
 
     def clear_call_button(self, floor: Floor, direction: Direction):
         # Clear a specific call button when the request is serviced
@@ -313,7 +301,7 @@ class ElevatorPanel(QFrame):
             button = QPushButton(floor_str)
             button.setFixedSize(50, 50)
             button.setCheckable(True)
-            button.clicked.connect(lambda checked, f_str=floor_str: self.select_floor(f_str))
+            button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"select_floor@{f_str}#{self.elevator_id}"))
             button_layout.addWidget(button, pos[0], pos[1])
             self.floor_buttons[floor_str] = button
         layout.addWidget(button_frame)
@@ -322,11 +310,11 @@ class ElevatorPanel(QFrame):
         door_layout = QHBoxLayout(door_frame)
 
         self.open_door_button = QPushButton(QCoreApplication.translate("ElevatorPanel", "Open Door"))
-        self.open_door_button.clicked.connect(self.open_door)
+        self.open_door_button.clicked.connect(lambda: self.elevator_controller.handle_message_task(f"open_door#{self.elevator_id}"))
         door_layout.addWidget(self.open_door_button)
 
         self.close_door_button = QPushButton(QCoreApplication.translate("ElevatorPanel", "Close Door"))
-        self.close_door_button.clicked.connect(self.close_door)
+        self.close_door_button.clicked.connect(lambda: self.elevator_controller.handle_message_task(f"close_door#{self.elevator_id}"))
         door_layout.addWidget(self.close_door_button)
         layout.addWidget(door_frame)
 
@@ -334,19 +322,6 @@ class ElevatorPanel(QFrame):
 
         if tm is not None:
             tm.add_observer(self)
-
-    def select_floor(self, floor_str: str):
-        # floor_str is the string representation of the floor
-        self.elevator_controller.handle_message_task(f"select_floor@{floor_str}#{self.elevator_id}")
-        self.floor_buttons[floor_str].setChecked(True)
-
-    def open_door(self):
-        """Open elevator door"""
-        self.elevator_controller.handle_message_task(f"open_door#{self.elevator_id}")
-
-    def close_door(self):
-        """Close elevator door"""
-        self.elevator_controller.handle_message_task(f"close_door#{self.elevator_id}")
 
     def update_elevator_status(self, floor: Floor, door_state: DoorState, direction: Direction):
         assert isinstance(floor, Floor), f"Expected Floor type, got {type(floor)}"

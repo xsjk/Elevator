@@ -6,11 +6,11 @@ from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
 import gui.main_window
+from controller import Controller
 from gui.gui_controller import GUIController
 from gui.i18n import TranslationManager
 from gui.main_window import MainWindow
 from utils.zmq_async import Client
-from controller import Controller
 
 
 async def main(headless: bool = False):

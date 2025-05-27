@@ -59,7 +59,7 @@ class Controller:
 
         self.start()
 
-        logger.info("Elevator system has been reset")
+        logger.info("Controller: Elevator system has been reset")
 
     def start(self, tg: asyncio.TaskGroup | None = None):
         self.task = (asyncio if tg is None else tg).create_task(self.control_loop())
@@ -70,13 +70,13 @@ class Controller:
 
     async def control_loop(self):
         try:
-            logger.debug("Control loop started")
+            logger.debug("Controller: Control loop started")
             async with asyncio.TaskGroup() as tg:
                 for e in self.elevators.values():
                     tg.create_task(e.door_loop())
                     tg.create_task(e.move_loop())
         except asyncio.CancelledError:
-            logger.debug("Control loop cancelled")
+            logger.debug("Controller: Control loop cancelled")
 
     def handle_message_task(self, message: str):
         asyncio.create_task(self.handle_message(message))
@@ -135,14 +135,14 @@ class Controller:
 
         # Check if the call direction is already requested
         if (call_floor, call_direction) in self.requests:
-            logger.info(f"Floor {call_floor} already requested {call_direction.name.lower()}")
+            logger.info(f"Controller: Floor {call_floor} already requested {call_direction.name.lower()}")
             return
 
-        logger.info(f"Calling elevator: Floor {call_floor}, Direction {call_direction.name.lower()}")
+        logger.info(f"Controller: Calling elevator: Floor {call_floor}, Direction {call_direction.name.lower()}")
 
         # Choose the best elevator (always choose the one that takes the shorter arrival time)
         elevator = min(self.elevators.values(), key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
-        logger.info(f"Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
+        logger.info(f"Controller: Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
         directed_target_floor = FloorAction(call_floor, call_direction)
         self.requests.add(directed_target_floor)
         event = elevator.commit_floor(call_floor, call_direction)
@@ -158,7 +158,7 @@ class Controller:
 
         # Check if the floor is already selected
         if floor in elevator.selected_floors:
-            logger.info(f"Floor {floor} already selected for elevator {elevator_id}")
+            logger.info(f"Controller: Floor {floor} already selected for elevator {elevator_id}")
             return
 
         elevator.selected_floors.add(floor)

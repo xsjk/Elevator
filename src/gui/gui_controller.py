@@ -58,14 +58,17 @@ class GUIController(Controller):
     async def _update_position(self):
         assert self.main_window is not None
         v = self.main_window.elevator_visualizer
-        while True:
-            await asyncio.sleep(0.02)
+        try:
+            while True:
+                await asyncio.sleep(0.02)
 
-            for eid, elevator in self.elevators.items():
-                v.elevators[eid]["current_position"] = v.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
-                v.elevators[eid]["door_percentage"] = elevator.door_position_percentage
+                for eid, elevator in self.elevators.items():
+                    v.elevators[eid]["current_position"] = v.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
+                    v.elevators[eid]["door_percentage"] = elevator.door_position_percentage
 
-            v.update()
+                v.update()
+        except asyncio.CancelledError:
+            pass
 
     def set_main_window(self, main_window: MainWindow):
         """Set the main window reference for UI updates"""
@@ -98,3 +101,20 @@ class GUIController(Controller):
         super().reset()
         if self.main_window:
             self.main_window.reset()
+
+    async def call_elevator(self, call_floor: Floor, call_direction: Direction):
+        if self.main_window:
+            match call_direction:
+                case Direction.UP:
+                    self.main_window.building_panel.up_buttons[str(call_floor)].setChecked(True)
+                case Direction.DOWN:
+                    self.main_window.building_panel.down_buttons[str(call_floor)].setChecked(True)
+                case _:
+                    raise ValueError(f"Invalid call direction: {call_direction}")
+
+        return await super().call_elevator(call_floor, call_direction)
+
+    async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
+        if self.main_window:
+            self.main_window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(True)
+        return await super().select_floor(floor, elevator_id)

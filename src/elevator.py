@@ -507,7 +507,7 @@ class Elevator:
 
                 # Signal that the floor as arrived
         except asyncio.CancelledError:
-            logger.debug("Elevator {self.id}: Move loop cancelled")
+            logger.debug(f"Elevator {self.id}: Move loop cancelled")
             pass
 
         finally:
