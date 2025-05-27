@@ -6,9 +6,9 @@ from pathlib import Path
 
 from aioconsole import ainput
 
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent))
 
-from utils.zmq_async import Server
+from system.utils.zmq_async import Server
 
 logger = logging.getLogger(__name__)
 

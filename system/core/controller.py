@@ -3,8 +3,8 @@ import inspect
 import logging
 from dataclasses import dataclass, field
 
-from elevator import Elevator, logger
-from utils.common import (
+from .elevator import Elevator, logger
+from ..utils.common import (
     Direction,
     DoorDirection,
     ElevatorId,
@@ -12,7 +12,7 @@ from utils.common import (
     Floor,
     FloorAction,
 )
-from utils.event_bus import event_bus
+from ..utils.event_bus import event_bus
 
 
 @dataclass

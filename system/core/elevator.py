@@ -9,7 +9,7 @@ from typing import Iterator, Self, SupportsIndex
 
 from rich.logging import RichHandler
 
-from utils.common import (
+from ..utils.common import (
     Direction,
     DoorDirection,
     DoorState,
@@ -19,7 +19,7 @@ from utils.common import (
     Floor,
     FloorAction,
 )
-from utils.event_bus import event_bus
+from ..utils.event_bus import event_bus
 
 logging.basicConfig(
     level="DEBUG",
@@ -479,11 +479,11 @@ class Elevator:
         try:
             self.move_loop_started = True
             while True:
-                # Wait for the door not open or moving
-                await self.door_idle_event.wait()
-
                 # Get the target floor from the plan
                 target_floor, direction = await self.target_floor_chains.get()
+
+                # Wait for the door not open or moving
+                await self.door_idle_event.wait()
 
                 # Start the elevator movement (move from current floor to target floor)
                 self._moving_timestamp = asyncio.get_event_loop().time()

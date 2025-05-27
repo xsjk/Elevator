@@ -1,12 +1,13 @@
 import asyncio
-import logging
 import inspect
+import logging
+
 from PySide6.QtCore import QCoreApplication
 
-from controller import Config, Controller, Floor
-from gui.main_window import MainWindow
-from utils.common import Direction, DoorState, ElevatorId, Event
-from utils.event_bus import event_bus
+from ..core.controller import Config, Controller, Floor
+from ..utils.common import Direction, DoorState, ElevatorId, Event
+from ..utils.event_bus import event_bus
+from .main_window import MainWindow
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,10 @@ class GUIController(Controller):
     Handles logging of commands to the console
     """
 
-    def __init__(self, main_window: MainWindow | None = None):
+    def __init__(self):
         super().__init__(Config())
-        self.main_window = main_window
+        self.window = MainWindow(self)
+        self.window.show()
 
         # Subscribe to elevator events
         self._setup_event_handlers()
@@ -33,14 +35,11 @@ class GUIController(Controller):
 
     def _on_elevator_state_changed(self, elevator_id: ElevatorId, floor: Floor, door_state: DoorState, direction: Direction):
         """Handle elevator state change events"""
-        if not self.main_window:
-            return
-
         try:
-            self.main_window.elevator_panels[elevator_id].update_elevator_status(floor, door_state, direction)
+            self.window.elevator_panels[elevator_id].update_elevator_status(floor, door_state, direction)
             # Update parent window's visualizer if available
-            if hasattr(self.main_window, "elevator_visualizer"):
-                self.main_window.elevator_visualizer.update_elevator_status(elevator_id, floor, door_open=door_state.is_open(), direction=direction)
+            if hasattr(self.window, "elevator_visualizer"):
+                self.window.elevator_visualizer.update_elevator_status(elevator_id, floor, door_open=door_state.is_open(), direction=direction)
 
             logging.debug(f"Updated UI for elevator {elevator_id}: floor={floor}, door={door_state}, direction={direction}")
         except Exception as e:
@@ -48,16 +47,13 @@ class GUIController(Controller):
             raise e
 
     def _on_call_completed(self, floor: Floor, direction: Direction):
-        if self.main_window:
-            self.main_window.building_panel.clear_call_button(floor, direction)
+        self.window.building_panel.clear_call_button(floor, direction)
 
     def _on_floor_arrived(self, floor: Floor, elevator_id: ElevatorId):
-        if self.main_window:
-            self.main_window.elevator_panels[elevator_id].clear_floor_button(str(floor))
+        self.window.elevator_panels[elevator_id].clear_floor_button(str(floor))
 
     async def _update_position(self):
-        assert self.main_window is not None
-        v = self.main_window.elevator_visualizer
+        v = self.window.elevator_visualizer
         try:
             while True:
                 await asyncio.sleep(0.02)
@@ -72,7 +68,7 @@ class GUIController(Controller):
 
     def set_main_window(self, main_window: MainWindow):
         """Set the main window reference for UI updates"""
-        self.main_window = main_window
+        self.window = main_window
 
         # Initialize UI with current elevator states
         for elevator_id, elevator in self.elevators.items():
@@ -83,12 +79,10 @@ class GUIController(Controller):
         Handle incoming messages and log them to the console
         Then delegate to the parent class for actual processing
         """
-        # Log message to console
-        if self.main_window:
-            # Using QCoreApplication.translate for translation
-            translated_text = QCoreApplication.translate("Console", "Processing command:")
-            self.main_window.console_widget.log_message(f"{translated_text} {message}")
-            logging.info(f"Processing command: {message}")
+        # Using QCoreApplication.translate for translation
+        translated_text = QCoreApplication.translate("Console", "Processing command:")
+        self.window.console_widget.log_message(f"{translated_text} {message}")
+        logging.info(f"Processing command: {message}")
 
         # Call parent class handler
         await super().handle_message(message)
@@ -99,22 +93,19 @@ class GUIController(Controller):
 
     def reset(self):
         super().reset()
-        if self.main_window:
-            self.main_window.reset()
+        self.window.reset()
 
     async def call_elevator(self, call_floor: Floor, call_direction: Direction):
-        if self.main_window:
-            match call_direction:
-                case Direction.UP:
-                    self.main_window.building_panel.up_buttons[str(call_floor)].setChecked(True)
-                case Direction.DOWN:
-                    self.main_window.building_panel.down_buttons[str(call_floor)].setChecked(True)
-                case _:
-                    raise ValueError(f"Invalid call direction: {call_direction}")
+        match call_direction:
+            case Direction.UP:
+                self.window.building_panel.up_buttons[str(call_floor)].setChecked(True)
+            case Direction.DOWN:
+                self.window.building_panel.down_buttons[str(call_floor)].setChecked(True)
+            case _:
+                raise ValueError(f"Invalid call direction: {call_direction}")
 
         return await super().call_elevator(call_floor, call_direction)
 
     async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
-        if self.main_window:
-            self.main_window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(True)
+        self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(True)
         return await super().select_floor(floor, elevator_id)

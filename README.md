@@ -34,26 +34,27 @@ An advanced elevator control system implemented in Python using PySide6 for the 
 
 ```
 Elevator/
-├── src/
-│   ├── main.py              # Main application entry point
-│   ├── controller.py        # Core elevator control logic
-│   ├── elevator.py          # Elevator state machine and behavior
+├── system/
+│   ├── __init__.py           # Package initializer for the system module
+│   ├── __main__.py           # Main application entry point
+│   ├── controller.py         # Core elevator control logic
+│   ├── elevator.py           # Elevator state machine and behavior
 │   ├── gui/
-│   │   ├── main_window.py   # Main GUI window and panels
+│   │   ├── main_window.py    # Main GUI window and panels
 │   │   ├── gui_controller.py # GUI-specific controller
-│   │   ├── visualizer.py    # Elevator visualization component
-│   │   ├── i18n.py          # Internationalization support
-│   │   └── translations/    # Language files (EN/CN)
+│   │   ├── visualizer.py     # Elevator visualization component
+│   │   ├── i18n.py           # Internationalization support
+│   │   └── translations/     # Language files (EN/CN)
 │   └── utils/
-│       ├── common.py        # Common types and enums
-│       ├── event_bus.py     # Event system implementation
-│       └── zmq_async.py     # ZeroMQ async client/server
-├── test/
-│   └── main.py              # Test server for automated testing
+│       ├── common.py         # Common types and enums
+│       ├── event_bus.py      # Event system implementation
+│       └── zmq_async.py      # ZeroMQ async client/server
+├── testing/
+│   └── __main__.py           # Test server for automated testing
 ├── docs/
-│   └── requirement/         # Project requirements and diagrams
-├── pyproject.toml           # Project configuration and dependencies
-└── README.md                # This file
+│   └── requirement/          # Project requirements and diagrams
+├── pyproject.toml            # Project configuration and dependencies
+└── README.md                 # This file
 ```
 
 ## Requirements
@@ -82,13 +83,13 @@ Elevator/
 To start the elevator control system with GUI:
 
 ```bash
-uv run src/main.py
+uv run python -m system
 ```
 
 To start without GUI (for testing purposes):
 
 ```bash
-uv run src/main.py --headless
+uv run python -m system --headless
 ```
 
 This launches the main application with:
@@ -103,7 +104,7 @@ This launches the main application with:
 To start the test server for automated testing:
 
 ```bash
-uv run test/main.py
+uv run python -m testing
 ```
 
 This starts a ZeroMQ server that:

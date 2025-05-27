@@ -4,7 +4,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
 from PySide6.QtWidgets import QFrame
 
-from utils.common import Direction, ElevatorId, Floor
+from ..utils.common import Direction, ElevatorId, Floor
 
 
 class ElevatorVisualizer(QFrame):

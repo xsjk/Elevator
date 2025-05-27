@@ -18,10 +18,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from controller import Controller
-from gui.i18n import TranslationManager
-from gui.visualizer import ElevatorVisualizer
-from utils.common import Direction, DoorState, Floor
+from ..core.controller import Controller
+from ..utils.common import Direction, DoorState, Floor
+from .i18n import TranslationManager
+from .visualizer import ElevatorVisualizer
 
 tm: TranslationManager | None = None
 
@@ -403,7 +403,7 @@ class ConsoleWidget(QFrame):
         self.elevator_controller.handle_message_task(command)
         self.console_output.append(f"> {command}")
 
-    def log_message(self, message):
+    def log_message(self, message: str):
         """Log a message to the console output"""
         self.console_output.append(message)
 
