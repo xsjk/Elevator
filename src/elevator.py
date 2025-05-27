@@ -1,5 +1,6 @@
 import asyncio
 import bisect
+import inspect
 import logging
 from copy import copy
 from dataclasses import dataclass, field
@@ -147,26 +148,47 @@ class TargetFloorChains:
         return next(iter(self))
 
     async def get(self) -> FloorAction:
-        while self.is_empty():
-            await asyncio.wait(
-                [
-                    asyncio.create_task(e.wait())
-                    for e in (
+        wait_tasks = []
+        try:
+            while self.is_empty():
+                for name, e in zip(
+                    [
+                        "current_chain.nonemptyEvent",
+                        "next_chain.nonemptyEvent",
+                        "future_chain.nonemptyEvent",
+                        "swap_event",
+                    ],
+                    [
                         self.current_chain.nonemptyEvent,
                         self.next_chain.nonemptyEvent,
                         self.future_chain.nonemptyEvent,
                         self.swap_event,
-                    )
-                ],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+                    ],
+                ):
+                    wait_tasks.append(asyncio.create_task(e.wait(), name=f"wait {name} {__file__}:{inspect.stack()[0].lineno}"))
 
-            # If swap_event is set, reset it and continue the loop
-            if self.swap_event.is_set():
-                self.swap_event.clear()
-                continue
+                await asyncio.wait(
+                    wait_tasks,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
 
-        return self.top()
+                # If swap_event is set, reset it and continue the loop
+                if self.swap_event.is_set():
+                    self.swap_event.clear()
+                    continue
+
+            return self.top()
+
+        finally:
+            for task in wait_tasks:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                    finally:
+                        assert task.cancelled() or task.done()
 
     def is_empty(self) -> bool:
         return len(self) == 0
@@ -318,7 +340,7 @@ class Elevator:
                     await self.commit_door(DoorDirection.OPEN)
                     e.set()
 
-                asyncio.create_task(open_door())
+                asyncio.create_task(open_door(), name=f"open_door_elevator_{self.id}_floor_{floor} {__file__}:{inspect.stack()[0].lineno}")
                 return e
 
         # Determine the chain to add the action to and process later in the move_loop
@@ -571,7 +593,7 @@ class Elevator:
                     case ElevatorState.STOPPED_DOOR_CLOSED:
                         if action == DoorDirection.OPEN:
                             self.door_idle_event.clear()
-                            task = asyncio.create_task(open_door())
+                            task = asyncio.create_task(open_door(), name=f"open_door_{__file__}:{inspect.stack()[0].lineno}")
                     case ElevatorState.CLOSING_DOOR:
                         assert task is not None
                         assert self._door_last_state_change_time is not None
@@ -584,7 +606,7 @@ class Elevator:
                             logger.info(f"Door closing is interrupted after {duration}")
 
                             self.door_idle_event.clear()
-                            task = asyncio.create_task(open_door(duration))
+                            task = asyncio.create_task(open_door(duration), name=f"open_door_{__file__}:{inspect.stack()[0].lineno}")
 
                     case ElevatorState.STOPPED_DOOR_OPENED:
                         assert task is not None
@@ -593,7 +615,7 @@ class Elevator:
                             task.cancel()  # cancel the stay duration if it is running
                             await task
                             assert task.cancelled() or task.done()
-                            task = asyncio.create_task(close_door())
+                            task = asyncio.create_task(close_door(), name=f"close_door_{__file__}:{inspect.stack()[0].lineno}")
 
                 self.door_action_processed.set()
 
@@ -603,6 +625,12 @@ class Elevator:
         finally:
             if task is not None and not task.done():
                 task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    assert task.cancelled() or task.done()
             self.door_loop_started = False
 
     @property

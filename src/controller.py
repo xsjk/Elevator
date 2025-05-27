@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 from dataclasses import dataclass, field
 
@@ -30,6 +31,7 @@ class Controller:
     config: Config = field(default_factory=Config)
     requests: set[FloorAction] = field(default_factory=set)  # External requests
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue
+    message_tasks: list = field(default_factory=list)
 
     def __post_init__(self):
         self.elevators = {
@@ -62,49 +64,56 @@ class Controller:
         logger.info("Controller: Elevator system has been reset")
 
     def start(self, tg: asyncio.TaskGroup | None = None):
-        self.task = (asyncio if tg is None else tg).create_task(self.control_loop())
+        self.control_task = (asyncio if tg is None else tg).create_task(self.control_loop(), name=f"ControllerControlLoop {__file__}:{inspect.stack()[0].lineno}")
 
     def stop(self):
-        if getattr(self, "task", None) is not None:
-            self.task.cancel()
+        if getattr(self, "control_task", None) is not None:
+            self.control_task.cancel()
+        for t in self.message_tasks:
+            t.cancel()
+        self.message_tasks.clear()
 
     async def control_loop(self):
         try:
             logger.debug("Controller: Control loop started")
             async with asyncio.TaskGroup() as tg:
                 for e in self.elevators.values():
-                    tg.create_task(e.door_loop())
-                    tg.create_task(e.move_loop())
+                    tg.create_task(e.door_loop(), name=f"ElevatorDoorLoop-{e.id} {__file__}:{inspect.stack()[0].lineno}")
+                    tg.create_task(e.move_loop(), name=f"ElevatorMoveLoop-{e.id} {__file__}:{inspect.stack()[0].lineno}")
         except asyncio.CancelledError:
             logger.debug("Controller: Control loop cancelled")
 
     def handle_message_task(self, message: str):
-        asyncio.create_task(self.handle_message(message))
+        self.message_tasks.append(asyncio.create_task(self.handle_message(message), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}"))
 
     async def handle_message(self, message: str):
-        if message == "reset":
-            self.reset()
+        try:
+            if message == "reset":
+                self.reset()
 
-        elif message.startswith("call_up@") or message.startswith("call_down@"):
-            direction = Direction.UP if message.startswith("call_up") else Direction.DOWN
-            floor = Floor(message.split("@")[1])
-            await self.call_elevator(floor, direction)
+            elif message.startswith("call_up@") or message.startswith("call_down@"):
+                direction = Direction.UP if message.startswith("call_up") else Direction.DOWN
+                floor = Floor(message.split("@")[1])
+                await self.call_elevator(floor, direction)
 
-        elif message.startswith("select_floor@"):
-            parts = message.split("@")[1].split("#")
-            floor = Floor(parts[0])
-            elevator_id = int(parts[1])
-            await self.select_floor(floor, elevator_id)
+            elif message.startswith("select_floor@"):
+                parts = message.split("@")[1].split("#")
+                floor = Floor(parts[0])
+                elevator_id = int(parts[1])
+                await self.select_floor(floor, elevator_id)
 
-        elif message.startswith("open_door#"):
-            elevator_id = int(message.split("#")[1])
-            elevator = self.elevators[elevator_id]
-            await self.open_door(elevator)
+            elif message.startswith("open_door#"):
+                elevator_id = int(message.split("#")[1])
+                elevator = self.elevators[elevator_id]
+                await self.open_door(elevator)
 
-        elif message.startswith("close_door#"):
-            elevator_id = int(message.split("#")[1])
-            elevator = self.elevators[elevator_id]
-            await self.close_door(elevator)
+            elif message.startswith("close_door#"):
+                elevator_id = int(message.split("#")[1])
+                elevator = self.elevators[elevator_id]
+                await self.close_door(elevator)
+
+        except asyncio.CancelledError:
+            pass
 
     async def get_event_message(self) -> str:
         return await self.queue.get()

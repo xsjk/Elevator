@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import inspect
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -43,8 +44,8 @@ class Base(ABC):
 
     def start(self, tg: asyncio.TaskGroup | None = None) -> None:
         e = asyncio if tg is None else tg
-        self._listen_task = e.create_task(self._listen_for_messages())
-        self._send_task = e.create_task(self._process_send_queue())
+        self._listen_task = e.create_task(self._listen_for_messages(), name=f"{self.__class__.__name__}ListenTask {__file__}:{inspect.stack()[0].lineno}")
+        self._send_task = e.create_task(self._process_send_queue(), name=f"{self.__class__.__name__}SendTask {__file__}:{inspect.stack()[0].lineno}")
 
     def stop(self) -> None:
         if self._listen_task:

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-
+import inspect
 from PySide6.QtCore import QCoreApplication
 
 from controller import Config, Controller, Floor
@@ -94,7 +94,7 @@ class GUIController(Controller):
         await super().handle_message(message)
 
     async def control_loop(self):
-        asyncio.create_task(self._update_position())
+        asyncio.create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
         return await super().control_loop()
 
     def reset(self):
