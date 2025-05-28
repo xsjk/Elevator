@@ -118,6 +118,11 @@ class Controller:
                 elevator_id = int(parts[1])
                 await self.deselect_floor(floor, elevator_id)
 
+            elif message.startswith("cancel_call_up@") or message.startswith("cancel_call_down@"):
+                direction = Direction.UP if message.startswith("cancel_call_up") else Direction.DOWN
+                floor = Floor(message.split("@")[1])
+                await self.cancel_call(floor, direction)
+
             else:
                 logger.warning(f"Controller: Unrecognized message '{message}'")
 
@@ -162,11 +167,35 @@ class Controller:
         elevator = min(self.elevators.values(), key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
         logger.info(f"Controller: Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
         directed_target_floor = FloorAction(call_floor, call_direction)
-        self.requests.add(directed_target_floor)
-        event = elevator.commit_floor(call_floor, call_direction)
-        await event.wait()
-        self.requests.remove(directed_target_floor)
-        event_bus.publish(Event.CALL_COMPLETED, call_floor, call_direction)
+
+        try:
+            self.requests.add(directed_target_floor)
+            await elevator.commit_floor(call_floor, call_direction).wait()
+            event_bus.publish(Event.CALL_COMPLETED, call_floor, call_direction)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.requests.remove(directed_target_floor)
+            elevator.cancel_commit(call_floor, call_direction)
+
+    async def cancel_call(self, call_floor: Floor, call_direction: Direction):
+        assert isinstance(call_floor, Floor)
+        assert call_direction in (Direction.UP, Direction.DOWN)
+
+        directed_target_floor = FloorAction(call_floor, call_direction)
+        key = f"call_{call_direction.name.lower()}@{call_floor}"
+        assert directed_target_floor in self.requests
+        assert key in self.message_tasks
+
+        # Cancel the task associated with the elevator call
+        t = self.message_tasks[key]
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+        finally:
+            assert directed_target_floor not in self.requests
 
     async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
         assert isinstance(floor, Floor)
@@ -181,13 +210,13 @@ class Controller:
 
         try:
             elevator.selected_floors.add(floor)
-            event = elevator.commit_floor(floor, Direction.IDLE)
-            await event.wait()
+            await elevator.commit_floor(floor, Direction.IDLE).wait()
             event_bus.publish(Event.FLOOR_ARRIVED, floor, elevator_id)
         except asyncio.CancelledError:
             pass
         finally:
             elevator.selected_floors.remove(floor)
+            elevator.cancel_commit(floor, Direction.IDLE)
 
     async def deselect_floor(self, floor: Floor, elevator_id: ElevatorId):
         assert isinstance(floor, Floor)
@@ -207,9 +236,8 @@ class Controller:
             await t
         except asyncio.CancelledError:
             pass
-        assert floor not in elevator.selected_floors
-
-        elevator.cancel_commit(floor, Direction.IDLE)
+        finally:
+            assert floor not in elevator.selected_floors
 
     async def open_door(self, elevator: Elevator):
         await elevator.commit_door(DoorDirection.OPEN)

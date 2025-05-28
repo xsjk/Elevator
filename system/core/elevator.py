@@ -22,7 +22,7 @@ from ..utils.common import (
 from ..utils.event_bus import event_bus
 
 logging.basicConfig(
-    level="DEBUG",
+    level="INFO",
     format="%(message)s",
     datefmt="[%X]",
     handlers=[RichHandler()],
@@ -190,6 +190,26 @@ class TargetFloorChains:
                     finally:
                         assert task.cancelled() or task.done()
 
+    def remove(self, item: FloorAction):
+        if item in self.current_chain:
+            self.current_chain.remove(item)
+            if not self.is_empty():
+                while self.current_chain.is_empty():
+                    self._swap_chains()
+            else:
+                self.direction = Direction.IDLE
+            return
+
+        if item in self.next_chain:
+            self.next_chain.remove(item)
+            return
+
+        if item in self.future_chain:
+            self.future_chain.remove(item)
+            return
+
+        raise ValueError(f"FloorAction {item} not found in any chain")
+
     def is_empty(self) -> bool:
         return len(self) == 0
 
@@ -341,6 +361,7 @@ class Elevator:
                     e.set()
 
                 asyncio.create_task(open_door(), name=f"open_door_elevator_{self.id}_floor_{floor} {__file__}:{inspect.stack()[0].lineno}")
+                logger.debug(f"Elevator {self.id}: Arrived at floor {floor} immediately, opening door")
                 return e
 
         # Determine the chain to add the action to and process later in the move_loop
@@ -381,14 +402,14 @@ class Elevator:
     def cancel_commit(self, floor: Floor, requested_direction: Direction = Direction.IDLE):
         directed_floor = FloorAction(floor, requested_direction)
         # Remove the action from the chain
-        for floor_chain in (self.target_floor_chains.current_chain, self.target_floor_chains.next_chain, self.target_floor_chains.future_chain):
-            if directed_floor in floor_chain:
-                floor_chain.remove(directed_floor)
-                event = self.events.pop(directed_floor)
-                event.set()
-                return
-
-        raise ValueError(f"Floor {floor} not in action chain")
+        logger.debug(f"Elevator {self.id}: Cancelling floor {floor} with direction {requested_direction.name}")
+        logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
+        if directed_floor in self.target_floor_chains:
+            self.target_floor_chains.remove(directed_floor)
+            assert directed_floor in self.events
+            event = self.events.pop(directed_floor)
+            event.set()
+            logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
 
     def arrival_summary(self, floor: Floor, requested_direction: Direction) -> tuple[float, int]:
         directed_floor = FloorAction(floor, requested_direction)
@@ -511,6 +532,7 @@ class Elevator:
                 else:
                     self.state = ElevatorState.STOPPED_DOOR_CLOSED
                     await self.commit_door(DoorDirection.OPEN)
+                    assert not self.door_idle_event.is_set()
 
                     while True:
                         self.pop_target()
@@ -527,13 +549,15 @@ class Elevator:
                         else:
                             target_floor, direction = self.target_floor_chains.top()
                             if target_floor == self.current_floor:
-                                logger.warning(f"Target floor {target_floor} is the same as current floor {self.current_floor}, skipping")
-                                continue
-                            if target_floor > self.current_floor:
+                                if direction == Direction.IDLE:
+                                    logger.warning(f"Target floor {target_floor} is the same as current floor {self.current_floor}, skipping")
+                            elif target_floor > self.current_floor:
                                 self.queue.put_nowait(f"up_{msg}")
                             else:  # target_floor < self.current_floor
                                 self.queue.put_nowait(f"down_{msg}")
                             break
+
+                    await self.door_idle_event.wait()  # wait for the door to close
 
                 self._moving_timestamp = None
 
@@ -666,8 +690,8 @@ class Elevator:
         old_state = self._state
         self._state = new_state
 
-        # Log state change
-        logger.debug(f"Elevator {self.id} state changed to {new_state.name}, door_open={self.door_open}, direction={self.commited_direction}")
+        # # Log state change
+        # logger.debug(f"Elevator {self.id} state changed to {new_state.name}, door_open={self.door_open}, direction={self.commited_direction}")
 
         # Publish event for state change
         if old_state != new_state:

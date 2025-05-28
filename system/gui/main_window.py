@@ -200,7 +200,7 @@ class BuildingPanel(QFrame):
                 up_button = QPushButton("↑")
                 up_button.setFixedSize(40, 40)
                 up_button.setCheckable(True)  # Make button checkable
-                up_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"call_up@{f_str}"))
+                up_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'cancel_'}call_up@{f_str}"))
                 button_layout.addWidget(up_button)
                 self.up_buttons[floor_str] = up_button
             else:  # Placeholder for top floor (no up button)
@@ -213,7 +213,7 @@ class BuildingPanel(QFrame):
                 down_button = QPushButton("↓")
                 down_button.setFixedSize(40, 40)
                 down_button.setCheckable(True)  # Make button checkable
-                down_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"call_down@{f_str}"))
+                down_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'cancel_'}call_down@{f_str}"))
                 button_layout.addWidget(down_button)
                 self.down_buttons[floor_str] = down_button
             else:  # Placeholder for bottom floor (no down button)
@@ -301,7 +301,7 @@ class ElevatorPanel(QFrame):
             button = QPushButton(floor_str)
             button.setFixedSize(50, 50)
             button.setCheckable(True)
-            button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'select_floor' if checked else 'deselect_floor'}@{f_str}#{self.elevator_id}"))
+            button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'de'}select_floor@{f_str}#{self.elevator_id}"))
             button_layout.addWidget(button, pos[0], pos[1])
             self.floor_buttons[floor_str] = button
         layout.addWidget(button_frame)

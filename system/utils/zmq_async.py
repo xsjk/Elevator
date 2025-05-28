@@ -10,7 +10,7 @@ import zmq.asyncio
 from rich.logging import RichHandler
 
 logging.basicConfig(
-    level="DEBUG",
+    level="INFO",
     format="%(message)s",
     datefmt="[%X]",
     handlers=[RichHandler()],
