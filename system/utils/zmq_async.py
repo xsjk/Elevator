@@ -4,6 +4,7 @@ import inspect
 import logging
 import time
 from abc import ABC, abstractmethod
+from typing import AsyncGenerator
 
 import zmq
 import zmq.asyncio
@@ -91,6 +92,11 @@ class Client(Base):
         self._receive_queue.task_done()
         return message, timestamp
 
+    async def messages(self) -> AsyncGenerator[tuple[str, int], None]:
+        while True:
+            message, timestamp = await self.read()
+            yield message, timestamp
+
     async def _listen_for_messages(self):
         try:
             while True:
@@ -135,6 +141,11 @@ class Server(Base):
         address, message, timestamp = await self._receive_queue.get()
         self._receive_queue.task_done()
         return address, message, timestamp
+
+    async def messages(self) -> AsyncGenerator[tuple[str, str, int], None]:
+        while True:
+            address, message, timestamp = await self.read()
+            yield address, message, timestamp
 
     async def _listen_for_messages(self):
         try:

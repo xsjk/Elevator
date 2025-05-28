@@ -10,13 +10,11 @@ from .utils.zmq_async import Client
 
 async def main(headless: bool = False):
     async def input_loop():
-        while True:
-            message, _ = await client.read()
-            await controller.handle_message(message)
+        async for msg, _ in client.messages():
+            await controller.handle_message(msg)
 
     async def output_loop():
-        while True:
-            msg = await controller.get_event_message()
+        async for msg in controller.messages():
             await client.send(msg)
 
     try:

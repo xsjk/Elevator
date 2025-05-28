@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 from dataclasses import dataclass, field
+from typing import AsyncGenerator
 
 from ..utils.common import (
     Direction,
@@ -146,6 +147,10 @@ class Controller:
 
     async def get_event_message(self) -> str:
         return await self.queue.get()
+
+    async def messages(self) -> AsyncGenerator[str, None]:
+        while True:
+            yield await self.get_event_message()
 
     def calculate_duration(self, n_floors: float, n_stops: int) -> float:
         return n_floors * self.config.floor_travel_duration + n_stops * (self.config.door_move_duration * 2 + self.config.door_stay_duration)

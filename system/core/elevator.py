@@ -816,13 +816,13 @@ if __name__ == "__main__":
                 await asyncio.sleep(1)
                 e.commit_floor(Floor("2"), Direction.UP)
                 e.commit_floor(Floor("2"), Direction.DOWN)
-                await asyncio.sleep(1.5)
-                e.commit_floor(Floor("1"), Direction.IDLE)
-                e.commit_floor(Floor("-1"), Direction.UP)
+
+                await asyncio.sleep(0.5)
+                e.commit_floor(Floor("3"), Direction.IDLE)
+                e.commit_floor(Floor("-1"), Direction.IDLE)
 
                 while True:
-                    msg = await e.queue.get()
-                    logger.info(msg)
+                    logger.info(await e.queue.get())
 
         except asyncio.CancelledError:
             pass

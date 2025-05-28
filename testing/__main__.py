@@ -70,8 +70,7 @@ async def testing(server: Server, client_addr: str):
         await server.send(bindedClient, f"call_{passenger.direction}@{passenger.start_floor}")
 
     ############ Passenger timed automata ############
-    while True:
-        address, clientMessage, timeStamp = await server.read()
+    async for address, clientMessage, timeStamp in server.messages():
         if address != client_addr:
             continue
         for passenger in passengers:
