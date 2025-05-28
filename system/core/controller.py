@@ -3,7 +3,6 @@ import inspect
 import logging
 from dataclasses import dataclass, field
 
-from .elevator import Elevator, logger
 from ..utils.common import (
     Direction,
     DoorDirection,
@@ -13,6 +12,7 @@ from ..utils.common import (
     FloorAction,
 )
 from ..utils.event_bus import event_bus
+from .elevator import Elevator, logger
 
 
 @dataclass
@@ -46,15 +46,15 @@ class Controller:
             for i in range(1, self.config.elevator_count + 1)
         }
 
-    def reset(self):
-        self.stop()
+    async def reset(self):
+        await self.stop()
 
         # Empty the queue
         while not self.queue.empty():
             self.queue.get_nowait()
 
         # Clear requests
-        self.requests.clear()
+        assert len(self.requests) == 0
 
         # Reset elevators
         self.__post_init__()
@@ -66,30 +66,60 @@ class Controller:
     def start(self, tg: asyncio.TaskGroup | None = None):
         self.control_task = (asyncio if tg is None else tg).create_task(self.control_loop(), name=f"ControllerControlLoop {__file__}:{inspect.stack()[0].lineno}")
 
-    def stop(self):
+    async def stop(self):
         if getattr(self, "control_task", None) is not None:
             self.control_task.cancel()
-        for t in self.message_tasks.values():
-            t.cancel()
-        self.message_tasks.clear()
+            try:
+                await self.control_task
+            except asyncio.CancelledError:
+                pass
+
+        reset_task = self.message_tasks.pop("reset")
+
+        while self.message_tasks:
+            m, t = next(iter(self.message_tasks.items()))
+            try:
+                t.cancel()
+                await t
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Controller: Error while stopping message task '{m}': {e}")
+            finally:
+                assert m not in self.message_tasks, f"Controller: Message task '{m}' still exists after cancellation"
+
+        self.message_tasks["reset"] = reset_task
 
     async def control_loop(self):
+        elevators = self.elevators.values()
         try:
             logger.debug("Controller: Control loop started")
             async with asyncio.TaskGroup() as tg:
-                for e in self.elevators.values():
+                for e in elevators:
                     tg.create_task(e.door_loop(), name=f"ElevatorDoorLoop-{e.id} {__file__}:{inspect.stack()[0].lineno}")
                     tg.create_task(e.move_loop(), name=f"ElevatorMoveLoop-{e.id} {__file__}:{inspect.stack()[0].lineno}")
         except asyncio.CancelledError:
             logger.debug("Controller: Control loop cancelled")
 
     def handle_message_task(self, message: str):
-        self.message_tasks[message] = asyncio.create_task(self.handle_message(message), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}")
+        assert message not in self.message_tasks, f"Controller: Message task for '{message}' already exists"
+
+        logger.debug(f"Controller: Existing tasks: {list(self.message_tasks)}")
+
+        async def wrapper():
+            try:
+                await self.handle_message(message)
+            except asyncio.CancelledError:
+                logger.debug(f"Controller: Message task for '{message}' cancelled")
+            finally:
+                self.message_tasks.pop(message)
+
+        self.message_tasks[message] = asyncio.create_task(wrapper(), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}")
 
     async def handle_message(self, message: str):
         try:
             if message == "reset":
-                self.reset()
+                await self.reset()
 
             elif message.startswith("call_up@") or message.startswith("call_down@"):
                 direction = Direction.UP if message.startswith("call_up") else Direction.DOWN
@@ -136,6 +166,7 @@ class Controller:
         return n_floors * self.config.floor_travel_duration + n_stops * (self.config.door_move_duration * 2 + self.config.door_stay_duration)
 
     def estimate_arrival_time(self, elevator: Elevator, target_floor: Floor, requested_direction: Direction) -> float:
+        old_level = logger.level
         logger.setLevel(logging.CRITICAL)
         elevator = elevator.copy()
         elevator.commit_floor(target_floor, requested_direction)
@@ -149,7 +180,8 @@ class Controller:
 
         n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
         duration += self.calculate_duration(n_floors, n_stops)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(old_level)
+        logger.debug(f"Controller: Estimation details - Elevator ID: {elevator.id}, Target Floor: {target_floor}, Requested Direction: {requested_direction.name}, Number of Floors: {n_floors}, Number of Stops: {n_stops}, Estimated Duration: {duration:.2f} seconds")
         return duration
 
     async def call_elevator(self, call_floor: Floor, call_direction: Direction):

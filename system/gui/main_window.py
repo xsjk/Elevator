@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
         # Add reset button
         self.control_layout = QVBoxLayout()
         self.reset_button = QPushButton(QCoreApplication.translate("MainWindow", "Reset Elevator System"))
-        self.reset_button.clicked.connect(self.elevator_controller.reset)
+        self.reset_button.clicked.connect(lambda: self.elevator_controller.handle_message_task("reset"))
         self.control_layout.addWidget(self.reset_button)
         self.control_layout.addStretch()
         self.content_layout.addLayout(self.control_layout)

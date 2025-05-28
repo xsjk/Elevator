@@ -29,6 +29,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class TargetFloors(list[FloorAction]):
@@ -121,28 +122,30 @@ class TargetFloorChains:
         self.current_chain, self.next_chain, self.future_chain = self.next_chain, self.future_chain, TargetFloors(self.direction)
 
     def pop(self) -> FloorAction:
-        if len(self.current_chain) > 0:
-            a = self.current_chain.pop(0)
+        try:
+            if len(self.current_chain) > 0:
+                a = self.current_chain.pop(0)
 
-            if a.direction != Direction.IDLE:
-                # do not swap the chains if the action is not IDLE
-                # this is to allow IDLE actions to be added to current_chain
+                if a.direction != Direction.IDLE:
+                    # do not swap the chains if the action is not IDLE
+                    # this is to allow IDLE actions to be added to current_chain
+                    return a
+
+                elif len(self) > 0:
+                    while len(self.current_chain) == 0:
+                        # If the current chain is empty, we need to swap the next and future chains
+                        self._swap_chains()
                 return a
-
-            if len(self) > 0:
+            elif len(self) > 0:
                 while len(self.current_chain) == 0:
                     # If the current chain is empty, we need to swap the next and future chains
                     self._swap_chains()
-            else:
-                self.direction = Direction.IDLE
-            return a
-        elif len(self) > 0:
-            while len(self.current_chain) == 0:
-                # If the current chain is empty, we need to swap the next and future chains
-                self._swap_chains()
-            return self.pop()
+                return self.pop()
 
-        raise IndexError("No actions in the current chain")
+            raise IndexError("No actions in the current chain")
+        finally:
+            if len(self) == 0:
+                self.direction = Direction.IDLE
 
     def top(self) -> FloorAction:
         return next(iter(self))
@@ -407,8 +410,7 @@ class Elevator:
         if directed_floor in self.target_floor_chains:
             self.target_floor_chains.remove(directed_floor)
             assert directed_floor in self.events
-            event = self.events.pop(directed_floor)
-            event.set()
+            self.events.pop(directed_floor).set()
             logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
 
     def arrival_summary(self, floor: Floor, requested_direction: Direction) -> tuple[float, int]:
@@ -422,7 +424,7 @@ class Elevator:
         n_stops = 0
         for a in iter(self.target_floor_chains):
             n_floors += abs(a.floor - current_floor)
-            if a == directed_floor:
+            if a.floor == floor and a.direction in (requested_direction, Direction.IDLE):
                 break
             n_stops += 1
 
@@ -534,6 +536,7 @@ class Elevator:
                     await self.commit_door(DoorDirection.OPEN)
                     assert not self.door_idle_event.is_set()
 
+                    commited_direction = direction
                     while True:
                         self.pop_target()
                         msg = f"floor_arrived@{self.current_floor}#{self.id}"
@@ -545,18 +548,33 @@ class Elevator:
                                     self.queue.put_nowait(f"up_{msg}")
                                 case Direction.DOWN:
                                     self.queue.put_nowait(f"down_{msg}")
-                            break
                         else:
-                            target_floor, direction = self.target_floor_chains.top()
-                            if target_floor == self.current_floor:
+                            next_target_floor, next_direction = self.target_floor_chains.top()
+                            if next_target_floor == self.current_floor:
+                                # get commited direction
+                                assert next_direction != direction
                                 if direction == Direction.IDLE:
-                                    logger.warning(f"Target floor {target_floor} is the same as current floor {self.current_floor}, skipping")
-                            elif target_floor > self.current_floor:
+                                    commited_direction = next_direction
+                                assert commited_direction != Direction.IDLE
+
+                                if next_direction == -commited_direction:
+                                    match commited_direction:
+                                        case Direction.UP:
+                                            self.queue.put_nowait(f"up_{msg}")
+                                        case Direction.DOWN:
+                                            self.queue.put_nowait(f"down_{msg}")
+                                    break  # we are going to the opposite direction, so we can stop here
+                                # otherwise, we can continue to the next target floor
+                                logger.warning(f"Target floor {next_target_floor} is the same as current floor {self.current_floor}, skipping")
+                                continue
+
+                            elif next_target_floor > self.current_floor:
                                 self.queue.put_nowait(f"up_{msg}")
                             else:  # target_floor < self.current_floor
                                 self.queue.put_nowait(f"down_{msg}")
-                            break
+                        break
 
+                    logger.debug(f"Elevator {self.id}: Waiting for door to close")
                     await self.door_idle_event.wait()  # wait for the door to close
 
                 self._moving_timestamp = None
@@ -716,9 +734,9 @@ class Elevator:
     def current_position(self) -> float:
         match self.moving_direction:
             case Direction.UP:
-                return float(self._current_floor) + self.position_percentage
+                return self._current_floor + self.position_percentage
             case Direction.DOWN:
-                return float(self._current_floor) - self.position_percentage
+                return self._current_floor - self.position_percentage
 
         return self._current_floor
 
@@ -732,9 +750,14 @@ class Elevator:
 
     @property
     def position_percentage(self) -> float:
-        p = (asyncio.get_event_loop().time() - self._moving_timestamp) / self.floor_travel_duration if self._moving_timestamp else 0.0
+        if self._moving_timestamp is None:
+            return 0.0
+        duration = asyncio.get_event_loop().time() - self._moving_timestamp
+        assert duration >= 0, "Moving timestamp is in the future"
+        p = duration / self.floor_travel_duration
         if p > 1:
             p = 1.0
+        assert 0 <= p <= 1, f"Position percentage {p} is out of bounds [0, 1]"
         return p
 
     @property

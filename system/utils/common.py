@@ -88,10 +88,20 @@ class Floor(int):
         return f"Floor({str(self)})"
 
     def __add__(self, other: int) -> Self:
-        return super().__new__(self.__class__, int(self) + other)
+        if isinstance(other, int):
+            return super().__new__(self.__class__, int(self) + other)
+        elif isinstance(other, float):
+            return float(self) + other
+        else:
+            raise TypeError(f"Unsupported operand type(s) for +: 'Floor' and '{type(other).__name__}'")
 
     def __sub__(self, other: int) -> Self:
-        return super().__new__(self.__class__, int(self) - other)
+        if isinstance(other, int):
+            return super().__new__(self.__class__, int(self) - other)
+        elif isinstance(other, float):
+            return float(self) - other
+        else:
+            raise TypeError(f"Unsupported operand type(s) for -: 'Floor' and '{type(other).__name__}'")
 
     def direction_to(self, other: Self) -> Direction:
         """Get the direction from the current floor to another floor."""

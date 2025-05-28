@@ -83,9 +83,9 @@ class GUIController(Controller):
         asyncio.create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
         await super().control_loop()
 
-    def reset(self):
-        super().reset()
+    async def reset(self):
         self.window.reset()
+        await super().reset()
 
     async def call_elevator(self, call_floor: Floor, call_direction: Direction):
         match call_direction:

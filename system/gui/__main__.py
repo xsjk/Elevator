@@ -4,8 +4,6 @@ import logging
 from . import run
 from .gui_controller import GUIController
 
-logger = logging.getLogger(__name__)
-
 
 async def main():
     try:
@@ -16,7 +14,7 @@ async def main():
             async def listen_msg():
                 while True:
                     msg = await c.get_event_message()
-                    logger.info(f"Received message: {msg}")
+                    logging.info(f"Received message: {msg}")
 
             tg.create_task(listen_msg(), name="ListenMsgLoop")
 
