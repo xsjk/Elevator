@@ -37,8 +37,9 @@ Elevator/
 ├── system/
 │   ├── __init__.py           # Package initializer for the system module
 │   ├── __main__.py           # Main application entry point
-│   ├── controller.py         # Core elevator control logic
-│   ├── elevator.py           # Elevator state machine and behavior
+│   ├── core/
+│   │   ├── controller.py     # Core elevator control logic
+│   │   ├── elevator.py       # Elevator state machine and behavior
 │   ├── gui/
 │   │   ├── main_window.py    # Main GUI window and panels
 │   │   ├── gui_controller.py # GUI-specific controller
@@ -83,13 +84,13 @@ Elevator/
 To start the elevator control system with GUI:
 
 ```bash
-uv run python -m system
+uv run -m system
 ```
 
 To start without GUI (for testing purposes):
 
 ```bash
-uv run python -m system --headless
+uv run -m system --headless
 ```
 
 This launches the main application with:
@@ -104,7 +105,7 @@ This launches the main application with:
 To start the test server for automated testing:
 
 ```bash
-uv run python -m testing
+uv run -m testing
 ```
 
 This starts a ZeroMQ server that:
@@ -148,7 +149,7 @@ This starts a ZeroMQ server that:
 
 ## Configuration
 
-The system supports various configuration options in `src/controller.py`:
+The system supports various configuration options in `system/core/controller.py`:
 
 - **Elevator Count**: Number of elevators (default: 2)
 - **Floor Travel Duration**: Time to move between floors

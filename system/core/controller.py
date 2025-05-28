@@ -53,9 +53,6 @@ class Controller:
         while not self.queue.empty():
             self.queue.get_nowait()
 
-        # Clear requests
-        assert len(self.requests) == 0
-
         # Reset elevators
         self.__post_init__()
 
@@ -64,44 +61,28 @@ class Controller:
         logger.info("Controller: Elevator system has been reset")
 
     def start(self, tg: asyncio.TaskGroup | None = None):
-        self.control_task = (asyncio if tg is None else tg).create_task(self.control_loop(), name=f"ControllerControlLoop {__file__}:{inspect.stack()[0].lineno}")
+        for e in self.elevators.values():
+            e.start(tg)
 
     async def stop(self):
-        if getattr(self, "control_task", None) is not None:
-            self.control_task.cancel()
-            try:
-                await self.control_task
-            except asyncio.CancelledError:
-                pass
+        for e in self.elevators.values():
+            await e.stop()
 
-        reset_task = self.message_tasks.pop("reset")
-
-        while self.message_tasks:
-            m, t = next(iter(self.message_tasks.items()))
+        current_task = asyncio.current_task()
+        for t in list(self.message_tasks.values()):
+            if t is current_task:
+                continue
             try:
                 t.cancel()
                 await t
             except asyncio.CancelledError:
                 pass
-            except Exception as e:
-                logger.error(f"Controller: Error while stopping message task '{m}': {e}")
-            finally:
-                assert m not in self.message_tasks, f"Controller: Message task '{m}' still exists after cancellation"
 
-        self.message_tasks["reset"] = reset_task
+        assert len(self.requests) == 0
+        for e in self.elevators.values():
+            assert len(e.selected_floors) == 0
 
-    async def control_loop(self):
-        elevators = self.elevators.values()
-        try:
-            logger.debug("Controller: Control loop started")
-            async with asyncio.TaskGroup() as tg:
-                for e in elevators:
-                    tg.create_task(e.door_loop(), name=f"ElevatorDoorLoop-{e.id} {__file__}:{inspect.stack()[0].lineno}")
-                    tg.create_task(e.move_loop(), name=f"ElevatorMoveLoop-{e.id} {__file__}:{inspect.stack()[0].lineno}")
-        except asyncio.CancelledError:
-            logger.debug("Controller: Control loop cancelled")
-
-    def handle_message_task(self, message: str):
+    def handle_message_task(self, message: str) -> asyncio.Task:
         assert message not in self.message_tasks, f"Controller: Message task for '{message}' already exists"
 
         logger.debug(f"Controller: Existing tasks: {list(self.message_tasks)}")
@@ -111,10 +92,14 @@ class Controller:
                 await self.handle_message(message)
             except asyncio.CancelledError:
                 logger.debug(f"Controller: Message task for '{message}' cancelled")
+            except Exception as e:
+                logger.error(f"Controller: Error while handling message '{message}': {e}")
+                raise
             finally:
                 self.message_tasks.pop(message)
 
         self.message_tasks[message] = asyncio.create_task(wrapper(), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}")
+        return self.message_tasks[message]
 
     async def handle_message(self, message: str):
         try:
@@ -196,7 +181,12 @@ class Controller:
         logger.info(f"Controller: Calling elevator: Floor {call_floor}, Direction {call_direction.name.lower()}")
 
         # Choose the best elevator (always choose the one that takes the shorter arrival time)
-        elevator = min(self.elevators.values(), key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
+        enabled_elevators = [e for e in self.elevators.values() if e.started]
+        if not enabled_elevators:
+            logger.warning(f"Controller: No enabled elevators available for call at Floor {call_floor} going {call_direction.name.lower()}")
+            return
+
+        elevator = min(enabled_elevators, key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
         logger.info(f"Controller: Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
         directed_target_floor = FloorAction(call_floor, call_direction)
 
@@ -234,6 +224,9 @@ class Controller:
         assert isinstance(elevator_id, ElevatorId)
 
         elevator = self.elevators[elevator_id]
+        if elevator.started is False:
+            logger.warning(f"Controller: Elevator {elevator_id} is not enabled, cannot select floor {floor}")
+            return
 
         # Check if the floor is already selected
         if floor in elevator.selected_floors:
@@ -287,8 +280,7 @@ if __name__ == "__main__":
                 c.start(tg)
 
                 await asyncio.sleep(1)
-                await c.handle_message("call_up@1")
-                await c.handle_message("call_down@2")
+                c.handle_message_task("call_up@1")
 
                 while True:
                     msg = await c.get_event_message()

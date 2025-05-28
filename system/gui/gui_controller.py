@@ -79,9 +79,9 @@ class GUIController(Controller):
         # Call parent class handler
         await super().handle_message(message)
 
-    async def control_loop(self):
-        asyncio.create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
-        await super().control_loop()
+    def start(self, tg: asyncio.TaskGroup | None = None):
+        super().start(tg)
+        (tg if tg else asyncio).create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
 
     async def reset(self):
         self.window.reset()

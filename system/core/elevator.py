@@ -492,7 +492,7 @@ class Elevator:
         logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
         return directed_floor
 
-    async def move_loop(self):
+    async def _move_loop(self):
         """
         Main loop for the elevator. This function will be called in a separate async task.
 
@@ -588,7 +588,7 @@ class Elevator:
             self.move_loop_started = False
             pass
 
-    async def door_loop(self):
+    async def _door_loop(self):
         async def open_door(duration=self.door_move_duration):
             try:
                 assert not self.door_idle_event.is_set()
@@ -684,6 +684,28 @@ class Elevator:
                 finally:
                     assert task.cancelled() or task.done()
             self.door_loop_started = False
+
+    @property
+    def started(self) -> bool:
+        return self.move_loop_started and self.door_loop_started
+
+    def start(self, tg: asyncio.TaskGroup | None = None):
+        t = tg if tg is not None else asyncio.get_event_loop()
+        if not self.started:
+            self.door_loop_task = t.create_task(self._door_loop(), name=f"door_loop_elevator_{self.id} {__file__}:{inspect.stack()[0].lineno}")
+            self.move_loop_task = t.create_task(self._move_loop(), name=f"move_loop_elevator_{self.id} {__file__}:{inspect.stack()[0].lineno}")
+
+    async def stop(self):
+        if not self.started:
+            return
+        for t in (self.door_loop_task, self.move_loop_task):
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+            finally:
+                assert t.cancelled() or t.done()
 
     @property
     def moving_direction(self) -> Direction:
@@ -788,12 +810,11 @@ if __name__ == "__main__":
     async def main():
         try:
             async with asyncio.TaskGroup() as tg:
-                e = Elevator(1)
-                tg.create_task(e.move_loop())
-                tg.create_task(e.door_loop())
+                e = Elevator(id=1)
+                e.start(tg)
 
                 await asyncio.sleep(1)
-                e.commit_floor(Floor("-1"), Direction.UP)
+                e.commit_floor(Floor("2"), Direction.UP)
                 e.commit_floor(Floor("2"), Direction.DOWN)
                 await asyncio.sleep(1.5)
                 e.commit_floor(Floor("1"), Direction.IDLE)
