@@ -326,10 +326,12 @@ class Elevator:
         Commit a floor to the elevator's list of target floors.
 
         Args:
-            floor (Floor): The floor to commit.
-            direction (Direction): The requested direction when the elevator arrives at the floor.
-                - When it is IDLE, it means the request is from the internal button selected by the user.
-                - When it is UP or DOWN, it means the request is from the external call up/down button.
+            floor (Floor): The floor to commit. Must be an instance of Floor.
+            requested_direction (Direction): The direction the elevator should take after arriving at the floor. If Direction.IDLE, it is a call inside the elevator
+
+        Returns:
+            asyncio.Event: An event that will be set when the elevator arrives at the committed floor.
+
         """
 
         if not self.move_loop_started:

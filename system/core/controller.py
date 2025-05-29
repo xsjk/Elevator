@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, overload
+from typing import AsyncGenerator
 
 from ..utils.common import (
     Direction,
@@ -30,9 +30,9 @@ class Config:
 @dataclass
 class Controller:
     config: Config = field(default_factory=Config)
-    requests: set[FloorAction] = field(default_factory=set)  # External requests
-    queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue
-    message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)  # Tasks for handling messages, the task should handle asyncio.CancelledError in its implementation
+    requests: set[FloorAction] = field(default_factory=set)  # External elevator call requests
+    queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue for inter-component communication
+    message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)  # Tasks for handling messages, each task should handle asyncio.CancelledError in its implementation
 
     def __post_init__(self):
         self.elevators = {

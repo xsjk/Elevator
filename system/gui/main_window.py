@@ -29,6 +29,7 @@ tm: TranslationManager | None = None
 class MainWindow(QMainWindow):
     """
     Main window of the elevator control system
+    Supports dynamic number of elevators based on controller configuration
     Contains building panel, elevator panels and console
     """
 
@@ -82,17 +83,25 @@ class MainWindow(QMainWindow):
         self.visualizer_toggle.stateChanged.connect(self.toggle_visualizer)
         self.language_layout.addWidget(self.visualizer_toggle)
 
-        # Add visualizer with correct floor order (from bottom to top)
-        self.elevator_visualizer = ElevatorVisualizer(floors=[Floor(s) for s in elevator_controller.config.floors])
+        # Add visualizer with correct floor order (from bottom to top) and dynamic elevator count
+        self.elevator_visualizer = ElevatorVisualizer(
+            floors=[Floor(s) for s in elevator_controller.config.floors],
+            elevator_count=elevator_controller.config.elevator_count,
+        )
         self.elevators_layout.addWidget(self.elevator_visualizer)
         self.elevator_visualizer.setVisible(True)  # Initially visible if toggle is checked
 
-        # Add elevator control panels
+        # Add elevator control panels - dynamically create based on controller config
         elevator_panels_widget = QWidget()
         elevator_panels_layout = QHBoxLayout(elevator_panels_widget)
-        self.elevator_panels = {i: ElevatorPanel(i, self.elevator_controller) for i in (1, 2)}
-        elevator_panels_layout.addWidget(self.elevator_panels[1])
-        elevator_panels_layout.addWidget(self.elevator_panels[2])
+
+        # Create elevator panels dynamically based on elevator_count from config
+        self.elevator_panels = {}
+        for elevator_id in range(1, self.elevator_controller.config.elevator_count + 1):
+            panel = ElevatorPanel(elevator_id, self.elevator_controller)
+            self.elevator_panels[elevator_id] = panel
+            elevator_panels_layout.addWidget(panel)
+
         self.elevators_layout.addWidget(elevator_panels_widget)
 
         # Create console
@@ -130,7 +139,7 @@ class MainWindow(QMainWindow):
 
     def reset(self):
         """Reset the elevator system to its initial state"""
-        # Reset UI state
+        # Reset UI state for all elevators dynamically
         for eid, panel in self.elevator_panels.items():
             panel.reset_internal_buttons()
             # Determine initial floor from config, default to "1" if not available

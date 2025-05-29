@@ -21,7 +21,7 @@ def run(coro: Coroutine):
 
     app.aboutToQuit.connect(close_event.set)
 
-    event_loop = QEventLoop(app)
+    event_loop: asyncio.AbstractEventLoop = QEventLoop(app)
     asyncio.set_event_loop(event_loop)
 
     with event_loop:

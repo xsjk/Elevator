@@ -3,12 +3,13 @@ import inspect
 import logging
 import sys
 
+from . import gui
 from .core.controller import Controller
 from .gui import GUIController
 from .utils.zmq_async import Client
 
 
-async def main(headless: bool = False):
+async def main(controller: Controller):
     async def input_loop():
         async for msg, _ in client.messages():
             await controller.handle_message(msg)
@@ -25,7 +26,6 @@ async def main(headless: bool = False):
 
             await client.send(f"Client[{identity}] is online")
 
-            controller = Controller() if headless else GUIController()
             controller.start(tg)
 
             tg.create_task(input_loop(), name=f"InputLoop {__file__}:{inspect.stack()[0].lineno}")
@@ -36,11 +36,7 @@ async def main(headless: bool = False):
 
 
 if __name__ == "__main__":
-    headless = "--headless" in sys.argv
-
-    if headless:
-        from asyncio import run
+    if "--headless" in sys.argv:
+        asyncio.run(main(Controller()))
     else:
-        from .gui import run
-
-    run(main(headless))
+        gui.run(main(GUIController()))

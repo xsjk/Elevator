@@ -20,11 +20,6 @@ class GUIController(Controller):
 
     def __init__(self):
         super().__init__(Config())
-        self.window = MainWindow(self)
-        self.window.show()
-
-        # Subscribe to elevator events
-        self._setup_event_handlers()
 
     def _setup_event_handlers(self):
         """Set up event handlers for elevator state changes"""
@@ -32,6 +27,13 @@ class GUIController(Controller):
         event_bus.subscribe(Event.ELEVATOR_FLOOR_CHANGED, self._on_elevator_state_changed)
         event_bus.subscribe(Event.CALL_COMPLETED, self._on_call_completed)
         event_bus.subscribe(Event.FLOOR_ARRIVED, self._on_floor_arrived)
+
+    def _unsubscribe_event_handlers(self):
+        """Unsubscribe from event handlers to prevent memory leaks"""
+        event_bus.unsubscribe(Event.ELEVATOR_STATE_CHANGED, self._on_elevator_state_changed)
+        event_bus.unsubscribe(Event.ELEVATOR_FLOOR_CHANGED, self._on_elevator_state_changed)
+        event_bus.unsubscribe(Event.CALL_COMPLETED, self._on_call_completed)
+        event_bus.unsubscribe(Event.FLOOR_ARRIVED, self._on_floor_arrived)
 
     def _on_elevator_state_changed(self, elevator_id: ElevatorId, floor: Floor, door_state: DoorState, direction: Direction):
         """Handle elevator state change events"""
@@ -81,14 +83,28 @@ class GUIController(Controller):
         await super().handle_message(message)
 
     def start(self, tg: asyncio.TaskGroup | None = None):
+        if not hasattr(self, "window"):
+            self.window = MainWindow(self)
+            self.window.show()
+
+        # Subscribe to elevator events
+        self._setup_event_handlers()
+
         super().start(tg)
         self.update_position_task = (tg if tg else asyncio).create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
 
     async def stop(self):
+        """
+        Stop the GUI controller and clean up resources
+        """
+
         if hasattr(self, "update_position_task") and not self.update_position_task.done():
             self.update_position_task.cancel()
             await self.update_position_task
         await super().stop()
+
+        # Unsubscribe from event handlers to prevent memory leaks
+        self._unsubscribe_event_handlers()
 
     async def reset(self):
         self.window.reset()

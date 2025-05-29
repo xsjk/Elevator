@@ -11,20 +11,26 @@ class ElevatorVisualizer(QFrame):
     """
     2D visualization of elevator movement
     Shows real-time position and status of elevators in the building
+    Supports dynamic number of elevators based on configuration
     """
 
     # Floor heights in pixels
     FLOOR_HEIGHT = 80
     # Building dimensions
-    BUILDING_WIDTH = 300
-    # Elevator dimensions
+    BUILDING_WIDTH = 300  # Elevator dimensions
     ELEVATOR_WIDTH = 60
     ELEVATOR_HEIGHT = 70
     # Horizontal spacing between elevators
     ELEVATOR_SPACING = 40
 
-    def __init__(self, floors, elevators=None):
-        """Initialize the elevator visualizer"""
+    def __init__(self, floors, elevators=None, elevator_count=2):
+        """Initialize the elevator visualizer
+
+        Args:
+            floors: List of Floor objects representing building floors
+            elevators: Optional dictionary of elevator configurations
+            elevator_count: Number of elevators to display (used when elevators is None)
+        """
         super().__init__()
 
         # Set minimum size
@@ -47,11 +53,13 @@ class ElevatorVisualizer(QFrame):
 
         self.floor_positions = self._calculate_floor_positions()
 
-        # Elevator configuration
-        self.elevators = elevators or {
-            1: {"current_floor": "1", "current_position": 0, "door_open": False, "direction": "idle"},
-            2: {"current_floor": "1", "current_position": 0, "door_open": False, "direction": "idle"},
-        }
+        # Elevator configuration - create elevators dynamically based on elevator_count
+        if elevators is None:
+            self.elevators = {}
+            for elevator_id in range(1, elevator_count + 1):
+                self.elevators[elevator_id] = {"current_floor": "1", "current_position": 0, "door_open": False, "direction": "idle"}
+        else:
+            self.elevators = elevators
 
         # Subscribe to position updates
         # event_bus.subscribe(Event.ELEVATOR_UPDATED, self._on_elevator_position_updated)
@@ -149,22 +157,6 @@ class ElevatorVisualizer(QFrame):
 
         # Draw elevators
         self._draw_elevators(painter, width, height)
-        """Draw the building structure"""
-        # Building outline
-        building_x = (width - self.BUILDING_WIDTH) / 2
-
-        # Draw floors
-        for floor, y_pos in self.floor_positions.items():
-            # Draw floor line
-            painter.setPen(QPen(self.mid_color, 2))
-            painter.drawLine(int(building_x), int(y_pos + self.FLOOR_HEIGHT), int(building_x + self.BUILDING_WIDTH), int(y_pos + self.FLOOR_HEIGHT))
-
-            # Draw floor label
-            painter.setPen(self.window_text_color)
-            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            painter.drawText(int(building_x - 40), int(y_pos + self.FLOOR_HEIGHT - 10), f"Floor {floor}")
-
-        self._draw_elevators_text(painter, width, height)
 
     def _draw_building(self, painter: QPainter, width, height):
         """Draw the building structure"""
@@ -175,19 +167,21 @@ class ElevatorVisualizer(QFrame):
         for floor, y_pos in self.floor_positions.items():
             # Draw floor line with theme-aware color
             painter.setPen(QPen(self.floor_line_color, 2))
-            painter.drawLine(int(building_x), int(y_pos + self.FLOOR_HEIGHT), int(building_x + self.BUILDING_WIDTH), int(y_pos + self.FLOOR_HEIGHT))
-
-            # Draw floor label with theme-aware color
+            painter.drawLine(int(building_x), int(y_pos + self.FLOOR_HEIGHT), int(building_x + self.BUILDING_WIDTH), int(y_pos + self.FLOOR_HEIGHT))  # Draw floor label with theme-aware color
             painter.setPen(self.window_text_color)
             painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             painter.drawText(int(building_x - 40), int(y_pos + self.FLOOR_HEIGHT - 10), f"Floor {floor}")
 
     def _draw_elevators(self, painter, width, height):
-        """Draw the elevators"""
+        """
+        Draw all elevators with dynamic positioning based on elevator count
+        Supports any number of elevators configured in the system
+        """
         building_x = (width - self.BUILDING_WIDTH) / 2
 
-        # Calculate starting position for first elevator
-        elevator_start_x = building_x + (self.BUILDING_WIDTH - (len(self.elevators) * self.ELEVATOR_WIDTH + (len(self.elevators) - 1) * self.ELEVATOR_SPACING)) / 2
+        # Calculate starting position for first elevator - centers all elevators in building
+        total_elevator_width = len(self.elevators) * self.ELEVATOR_WIDTH + (len(self.elevators) - 1) * self.ELEVATOR_SPACING
+        elevator_start_x = building_x + (self.BUILDING_WIDTH - total_elevator_width) / 2
 
         # Draw each elevator
         for elevator_id, elevator in self.elevators.items():

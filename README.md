@@ -1,12 +1,12 @@
 # Elevator Control System
 
-An advanced elevator control system implemented in Python using PySide6 for the graphical user interface. This system provides realistic elevator simulation with dual elevator management, floor calling, door control, and smooth animations.
+An advanced elevator control system implemented in Python using PySide6 for the graphical user interface. This system provides realistic elevator simulation with multi-elevator management, floor calling, door control, and smooth animations.
 
 ## Features
 
 ### 🏢 Core Functionality
 
-- **Dual Elevator System**: Control and monitor two independent elevators
+- **Multi-Elevator System**: Control and monitor multiple independent elevators (configurable count)
 - **Smart Dispatching**: Intelligent elevator assignment based on distance and efficiency
 - **Floor Calling**: Call elevators from any floor with up/down direction
 - **Internal Floor Selection**: Select destination floors from inside elevators
@@ -96,7 +96,7 @@ uv run -m system --headless
 This launches the main application with:
 
 - Building panel for calling elevators
-- Two elevator panels for floor selection and door control
+- Multiple elevator panels for floor selection and door control (configurable count)
 - Real-time elevator visualization
 - Language switching (English/Chinese)
 
@@ -151,7 +151,7 @@ This starts a ZeroMQ server that:
 
 The system supports various configuration options in `system/core/controller.py`:
 
-- **Elevator Count**: Number of elevators (default: 2)
+- **Elevator Count**: Number of elevators (default: 2, configurable via Config.elevator_count)
 - **Floor Travel Duration**: Time to move between floors
 - **Door Operation Duration**: Time for door open/close operations
 - **Acceleration Settings**: Elevator movement acceleration parameters
