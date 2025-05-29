@@ -45,7 +45,7 @@ class TargetFloors(list[FloorAction]):
         self.nonemptyEvent = asyncio.Event()
 
     def add(self, floor: Floor, direction: Direction):
-        assert direction in (Direction.IDLE, self.direction), "Direction of requested action is not the same as the chain direction"
+        assert direction in (Direction.IDLE, self.direction), f"Direction of requested action {direction.name} does not match the chain direction {self.direction.name}"
         bisect.insort(self, FloorAction(floor, direction), key=self.key)
         if not self.is_empty():
             self.nonemptyEvent.set()
@@ -119,7 +119,8 @@ class TargetFloorChains:
         This is used when the current chain is empty and we need to move to the next chain.
         """
         self.swap_event.set()
-        self.current_chain, self.next_chain, self.future_chain = self.next_chain, self.future_chain, TargetFloors(self.direction)
+        self.current_chain, self.next_chain, self.future_chain = self.next_chain, self.future_chain, TargetFloors(-self.future_chain.direction)
+        assert self.current_chain.direction == -self.next_chain.direction == self.future_chain.direction, f"Direction mismatch after swap: {self.current_chain.direction}, {self.next_chain.direction}, {self.future_chain.direction}"
 
     def pop(self) -> FloorAction:
         try:
@@ -265,7 +266,7 @@ class Elevator:
     door_stay_duration: float = 3.0
 
     @property
-    def acccerate_distance(self) -> float:
+    def accelerate_distance(self) -> float:
         return 0.5 / self.floor_travel_duration * self.accelerate_duration
 
     @property
@@ -731,7 +732,7 @@ class Elevator:
         self._state = new_state
 
         # # Log state change
-        # logger.debug(f"Elevator {self.id} state changed to {new_state.name}, door_open={self.door_open}, direction={self.commited_direction}")
+        # logger.debug(f"Elevator {self.id} state changed to {new_state.name}, door_open={self.door_open}, direction={self.committed_direction}")
 
         # Publish event for state change
         if old_state != new_state:
@@ -801,7 +802,7 @@ class Elevator:
         return self.state.get_door_state()
 
     @property
-    def commited_direction(self) -> Direction:
+    def committed_direction(self) -> Direction:
         return self.target_floor_chains.direction
 
 

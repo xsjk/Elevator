@@ -81,7 +81,13 @@ class GUIController(Controller):
 
     def start(self, tg: asyncio.TaskGroup | None = None):
         super().start(tg)
-        (tg if tg else asyncio).create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
+        self.update_position_task = (tg if tg else asyncio).create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
+
+    async def stop(self):
+        if hasattr(self, "update_position_task") and not self.update_position_task.done():
+            self.update_position_task.cancel()
+            await self.update_position_task
+        await super().stop()
 
     async def reset(self):
         self.window.reset()
