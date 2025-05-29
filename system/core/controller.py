@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from dataclasses import dataclass, field
-from typing import AsyncGenerator
+from typing import AsyncGenerator, overload
 
 from ..utils.common import (
     Direction,
@@ -32,7 +32,7 @@ class Controller:
     config: Config = field(default_factory=Config)
     requests: set[FloorAction] = field(default_factory=set)  # External requests
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue
-    message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
+    message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)  # Tasks for handling messages, the task should handle asyncio.CancelledError in its implementation
 
     def __post_init__(self):
         self.elevators = {
@@ -71,13 +71,9 @@ class Controller:
 
         current_task = asyncio.current_task()
         for t in list(self.message_tasks.values()):
-            if t is current_task:
-                continue
-            try:
+            if t is not current_task:
                 t.cancel()
                 await t
-            except asyncio.CancelledError:
-                pass
 
         assert len(self.requests) == 0
         for e in self.elevators.values():
@@ -95,7 +91,7 @@ class Controller:
                 logger.debug(f"Controller: Message task for '{message}' cancelled")
             except Exception as e:
                 logger.error(f"Controller: Error while handling message '{message}': {e}")
-                raise
+                raise e
             finally:
                 self.message_tasks.pop(message)
 
@@ -103,47 +99,43 @@ class Controller:
         return self.message_tasks[message]
 
     async def handle_message(self, message: str):
-        try:
-            if message == "reset":
-                await self.reset()
+        if message == "reset":
+            await self.reset()
 
-            elif message.startswith("call_up@") or message.startswith("call_down@"):
-                direction = Direction.UP if message.startswith("call_up") else Direction.DOWN
-                floor = Floor(message.split("@")[1])
-                await self.call_elevator(floor, direction)
+        elif message.startswith("call_up@") or message.startswith("call_down@"):
+            direction = Direction.UP if message.startswith("call_up") else Direction.DOWN
+            floor = Floor(message.split("@")[1])
+            await self.call_elevator(floor, direction)
 
-            elif message.startswith("select_floor@"):
-                parts = message.split("@")[1].split("#")
-                floor = Floor(parts[0])
-                elevator_id = int(parts[1])
-                await self.select_floor(floor, elevator_id)
+        elif message.startswith("select_floor@"):
+            parts = message.split("@")[1].split("#")
+            floor = Floor(parts[0])
+            elevator_id = int(parts[1])
+            await self.select_floor(floor, elevator_id)
 
-            elif message.startswith("open_door#"):
-                elevator_id = int(message.split("#")[1])
-                elevator = self.elevators[elevator_id]
-                await self.open_door(elevator)
+        elif message.startswith("open_door#"):
+            elevator_id = int(message.split("#")[1])
+            elevator = self.elevators[elevator_id]
+            await self.open_door(elevator)
 
-            elif message.startswith("close_door#"):
-                elevator_id = int(message.split("#")[1])
-                elevator = self.elevators[elevator_id]
-                await self.close_door(elevator)
+        elif message.startswith("close_door#"):
+            elevator_id = int(message.split("#")[1])
+            elevator = self.elevators[elevator_id]
+            await self.close_door(elevator)
 
-            elif message.startswith("deselect_floor@"):
-                parts = message.split("@")[1].split("#")
-                floor = Floor(parts[0])
-                elevator_id = int(parts[1])
-                await self.deselect_floor(floor, elevator_id)
+        elif message.startswith("deselect_floor@"):
+            parts = message.split("@")[1].split("#")
+            floor = Floor(parts[0])
+            elevator_id = int(parts[1])
+            await self.deselect_floor(floor, elevator_id)
 
-            elif message.startswith("cancel_call_up@") or message.startswith("cancel_call_down@"):
-                direction = Direction.UP if message.startswith("cancel_call_up") else Direction.DOWN
-                floor = Floor(message.split("@")[1])
-                await self.cancel_call(floor, direction)
+        elif message.startswith("cancel_call_up@") or message.startswith("cancel_call_down@"):
+            direction = Direction.UP if message.startswith("cancel_call_up") else Direction.DOWN
+            floor = Floor(message.split("@")[1])
+            await self.cancel_call(floor, direction)
 
-            else:
-                logger.warning(f"Controller: Unrecognized message '{message}'")
-
-        except asyncio.CancelledError:
-            pass
+        else:
+            logger.warning(f"Controller: Unrecognized message '{message}'")
 
     async def get_event_message(self) -> str:
         return await self.queue.get()
@@ -163,7 +155,7 @@ class Controller:
 
         if elevator.state.is_moving():
             duration = elevator.door_move_duration + elevator.door_stay_duration
-        elif target_floor == elevator.current_floor and elevator.commited_direction == requested_direction:
+        elif target_floor == elevator.current_floor and elevator.committed_direction == requested_direction:
             return elevator.estimate_door_open_time()
         else:
             duration = elevator.estimate_door_close_time() + elevator.door_move_duration + elevator.door_stay_duration
@@ -217,12 +209,8 @@ class Controller:
         # Cancel the task associated with the elevator call
         t = self.message_tasks[key]
         t.cancel()
-        try:
-            await t
-        except asyncio.CancelledError:
-            pass
-        finally:
-            assert directed_target_floor not in self.requests
+        await t
+        assert directed_target_floor not in self.requests
 
     async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
         assert isinstance(floor, Floor)
@@ -262,12 +250,8 @@ class Controller:
         # Cancel the task associated with the floor selection and wait for it to finishs
         t = self.message_tasks[key]
         t.cancel()
-        try:
-            await t
-        except asyncio.CancelledError:
-            pass
-        finally:
-            assert floor not in elevator.selected_floors
+        await t
+        assert floor not in elevator.selected_floors
 
     async def open_door(self, elevator: Elevator):
         await elevator.commit_door(DoorDirection.OPEN)

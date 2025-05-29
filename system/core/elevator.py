@@ -537,7 +537,7 @@ class Elevator:
                     await self.commit_door(DoorDirection.OPEN)
                     assert not self.door_idle_event.is_set()
 
-                    commited_direction = direction
+                    committed_direction = direction
                     while True:
                         self.pop_target()
                         msg = f"floor_arrived@{self.current_floor}#{self.id}"
@@ -555,11 +555,11 @@ class Elevator:
                                 # get commited direction
                                 assert next_direction != direction
                                 if direction == Direction.IDLE:
-                                    commited_direction = next_direction
-                                assert commited_direction != Direction.IDLE
+                                    committed_direction = next_direction
+                                assert committed_direction != Direction.IDLE
 
-                                if next_direction == -commited_direction:
-                                    match commited_direction:
+                                if next_direction == -committed_direction:
+                                    match committed_direction:
                                         case Direction.UP:
                                             self.queue.put_nowait(f"up_{msg}")
                                         case Direction.DOWN:
@@ -678,12 +678,8 @@ class Elevator:
         finally:
             if task is not None and not task.done():
                 task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-                finally:
-                    assert task.cancelled() or task.done()
+                await task
+                assert task.cancelled() or task.done()
             self.door_loop_started = False
 
     @property
@@ -701,12 +697,8 @@ class Elevator:
             return
         for t in (self.door_loop_task, self.move_loop_task):
             t.cancel()
-            try:
-                await t
-            except asyncio.CancelledError:
-                pass
-            finally:
-                assert t.cancelled() or t.done()
+            await t
+            assert t.cancelled() or t.done()
 
     @property
     def moving_direction(self) -> Direction:
@@ -748,7 +740,7 @@ class Elevator:
             self._current_floor = new_floor
 
             # Log floor change
-            logger.debug(f"Elevator {self.id} floor changed to {new_floor}")
+            logger.debug(f"Elevator {self.id}: floor changed to {new_floor}")
 
             # Publish event for floor change
             event_bus.publish(Event.ELEVATOR_FLOOR_CHANGED, self.id, self.current_floor, self.door_state, self.moving_direction)

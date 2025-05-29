@@ -137,7 +137,7 @@ async def main():
                 await testing(server, addr)
 
     except asyncio.CancelledError:
-        logger.info("Program cancelled")
+        pass
     finally:
         server.stop()
 

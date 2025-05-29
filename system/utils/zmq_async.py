@@ -106,7 +106,6 @@ class Client(Base):
                 timestamp = int(round(time.time() * 1000))
                 await self._receive_queue.put((message_str, timestamp))
                 logger.debug(f'Server -> Client[{self.identity}]: "{message_str}"')
-
         except asyncio.CancelledError:
             pass
 
@@ -194,12 +193,9 @@ if __name__ == "__main__":
                     server = Server(server_host=args.ip, server_port=args.port)
 
                     async def message_echo_loop():
-                        try:
-                            while True:
-                                address, message, _ = await server.read()
-                                await server.send(address, f"Echo: {message}")
-                        except asyncio.CancelledError:
-                            pass
+                        async for address, message, _ in server.messages():
+                            logger.info(f"Message received from {address}: {message}")
+                            await server.send(address, f"Echo: {message}")
 
                     server.start()
                     await message_echo_loop()
@@ -208,22 +204,15 @@ if __name__ == "__main__":
                     client = Client(server_host=args.ip, port=args.port, identity=args.identity)
 
                     async def process_client_messages():
-                        try:
-                            while True:
-                                message, _ = await client.read()
-                                logger.info(f"Response received: {message}")
-                        except asyncio.CancelledError:
-                            pass
+                        async for message, _ in client.messages():
+                            logger.info(f"Response received: {message}")
 
                     async def send_messages():
-                        try:
-                            for i in range(5):
-                                message = f"Greeting from {args.identity} {i + 1}"
-                                await client.send(message)
-                                logger.info(f"Message sent: {message}")
-                                await asyncio.sleep(1)
-                        except asyncio.CancelledError:
-                            pass
+                        for i in range(5):
+                            message = f"Greeting from {args.identity} {i + 1}"
+                            await client.send(message)
+                            logger.info(f"Message sent: {message}")
+                            await asyncio.sleep(1)
 
                     client.start()
                     await asyncio.gather(process_client_messages(), send_messages())

@@ -64,6 +64,7 @@ class GUIController(Controller):
 
                 v.update()
         except asyncio.CancelledError:
+            logger.debug("Position update loop cancelled")
             pass
 
     async def handle_message(self, message: str):
