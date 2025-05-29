@@ -38,7 +38,6 @@ class TranslationManager:
 
         # Maps for locale codes to language names
         locale_language_map = {
-            "en_US": "English",
             "zh_CN": "中文",
             "es_ES": "Español",
             "fr_FR": "Français",
@@ -51,6 +50,10 @@ class TranslationManager:
 
         self.language_to_locale = {}
         self.available_languages = []
+
+        # Always include English as available (no translation needed since app is in English)
+        self.available_languages.append("English")
+        self.language_to_locale["English"] = None  # No locale needed for English
 
         # Look for .qm files in the translations directory
         pattern = r"elevator_([a-z]{2}_[A-Z]{2})\.qm"
@@ -69,11 +72,11 @@ class TranslationManager:
 
         logging.debug(f"Detected available languages: {self.available_languages}")
 
-        # Set default language to Chinese if available, otherwise use the first available language
+        # Set default language to Chinese if available, otherwise use English
         if "中文" in self.available_languages:
             self.default_language = "中文"
-        elif self.available_languages:
-            self.default_language = self.available_languages[0]
+        else:
+            self.default_language = "English"
 
         self.set_language(self.default_language)
 
@@ -89,16 +92,19 @@ class TranslationManager:
         # Update current language
         self.current_language = language
 
-        # Get the corresponding locale
-        locale_name = self.language_to_locale.get(language)
-        if not locale_name:
-            logging.warning(f"No locale mapping for language '{language}'. Cannot set language.")
-            return
-
         # Clear previous translator
         self.app.removeTranslator(self.translator)
 
-        # Create new translator
+        # Get the corresponding locale
+        locale_name = self.language_to_locale.get(language)
+
+        # For English, no translation is needed since the app is already in English
+        if locale_name is None:
+            logging.debug(f"Language '{language}' uses default text (no translation needed)")
+            self.notify_observers()
+            return
+
+        # Create new translator for non-English languages
         self.translator = QTranslator()
 
         # Load new translation

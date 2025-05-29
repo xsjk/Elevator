@@ -296,6 +296,7 @@ class Elevator:
     events: dict[FloorAction, asyncio.Event] = field(default_factory=dict)
 
     _moving_timestamp: float | None = None  # Timestamp when movement starts
+    _moving_speed: float | None = None  # Speed of the elevator during movement, None if not moving
     _door_last_state_change_time: float | None = None  # Timestamp when door movement starts
 
     door_loop_started: bool = False
@@ -513,6 +514,7 @@ class Elevator:
 
                 # Start the elevator movement (move from current floor to target floor)
                 self._moving_timestamp = asyncio.get_event_loop().time()
+                self._moving_speed = self.max_speed
 
                 if self.current_floor < target_floor:
                     self.state = ElevatorState.MOVING_UP
@@ -771,7 +773,8 @@ class Elevator:
             return 0.0
         duration = asyncio.get_event_loop().time() - self._moving_timestamp
         assert duration >= 0, "Moving timestamp is in the future"
-        p = duration / self.floor_travel_duration
+        assert self._moving_speed is not None
+        p = duration * self._moving_speed
         if p > 1:
             p = 1.0
         assert 0 <= p <= 1, f"Position percentage {p} is out of bounds [0, 1]"

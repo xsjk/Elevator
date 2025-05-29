@@ -1,4 +1,5 @@
 import logging
+from collections import OrderedDict
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
@@ -23,14 +24,18 @@ class ElevatorVisualizer(QFrame):
     # Horizontal spacing between elevators
     ELEVATOR_SPACING = 40
 
-    def __init__(self, floors, elevators=None, elevator_count=2):
+    def __init__(self, floors: list[Floor], elevator_count: int):
         """Initialize the elevator visualizer
 
         Args:
             floors: List of Floor objects representing building floors
-            elevators: Optional dictionary of elevator configurations
             elevator_count: Number of elevators to display (used when elevators is None)
         """
+
+        for floor in floors:
+            assert isinstance(floor, Floor), f"Invalid floor type: {type(floor)}. Expected Floor instance."
+        assert elevator_count > 0, "Elevator count must be greater than 0"
+
         super().__init__()
 
         # Set minimum size
@@ -44,28 +49,35 @@ class ElevatorVisualizer(QFrame):
         # Floor configuration (from bottom to top)
         # Changed order to ensure -1 is at the bottom, followed by 1, 2, 3
         self.floors = floors
+        self.floors.sort()
 
         # Ensure floors are in the correct order from bottom to top
-        if "-1" in self.floors and self.floors.index("-1") != 0:
-            # Reorder floors to ensure -1 is at the bottom
-            self.floors.remove("-1")
-            self.floors.insert(0, "-1")
-
         self.floor_positions = self._calculate_floor_positions()
 
         # Elevator configuration - create elevators dynamically based on elevator_count
-        if elevators is None:
-            self.elevators = {}
-            for elevator_id in range(1, elevator_count + 1):
-                self.elevators[elevator_id] = {"current_floor": "1", "current_position": 0, "door_open": False, "direction": "idle"}
-        else:
-            self.elevators = elevators
+        self.elevator_status = OrderedDict()
+        self.set_elevator_count(elevator_count)
 
         # Subscribe to position updates
         # event_bus.subscribe(Event.ELEVATOR_UPDATED, self._on_elevator_position_updated)
 
         # Cache theme colors
         self._update_theme_colors()
+
+    def set_elevator_count(self, count: int):
+        if count < len(self.elevator_status):
+            # Remove excess elevators
+            for eid in list(self.elevator_status.keys())[count:]:
+                del self.elevator_status[eid]
+        elif count > len(self.elevator_status):
+            # Add new elevators
+            for i in range(len(self.elevator_status) + 1, count + 1):
+                self.elevator_status[i] = {
+                    "current_floor": "1",  # Start at ground floor
+                    "current_position": 1.0,  # Start position at ground floor
+                    "door_open": False,
+                    "direction": "idle",  # Initial direction
+                }
 
     def _update_theme_colors(self):
         """Retrieve current palette colors to adapt to system theme"""
@@ -119,7 +131,7 @@ class ElevatorVisualizer(QFrame):
 
     def update_elevator_status(self, elevator_id: ElevatorId, floor: Floor, door_open: bool, direction: Direction):
         """Update the state of an elevator"""
-        if elevator_id not in self.elevators:
+        if elevator_id not in self.elevator_status:
             logging.warning(f"Invalid elevator ID: {elevator_id}")
             return
 
@@ -127,13 +139,13 @@ class ElevatorVisualizer(QFrame):
         logging.debug(f"Updating elevator {elevator_id} visualization: floor={floor}, door_open={door_open}, direction={direction}")
 
         # Update elevator state
-        self.elevators[elevator_id]["current_floor"] = floor
-        self.elevators[elevator_id]["door_open"] = door_open
-        self.elevators[elevator_id]["direction"] = direction
+        self.elevator_status[elevator_id]["current_floor"] = floor
+        self.elevator_status[elevator_id]["door_open"] = door_open
+        self.elevator_status[elevator_id]["direction"] = direction
 
         # Update position directly
         if floor in self.floor_positions:
-            self.elevators[elevator_id]["current_position"] = self.floor_positions[floor]
+            self.elevator_status[elevator_id]["current_position"] = self.floor_positions[floor]
             logging.debug(f"Set elevator {elevator_id} position to {self.floor_positions[floor]} for floor {floor}")
         else:
             logging.warning(f"Floor {floor} not found in floor positions map. Available floors: {list(self.floor_positions.keys())}")
@@ -180,11 +192,11 @@ class ElevatorVisualizer(QFrame):
         building_x = (width - self.BUILDING_WIDTH) / 2
 
         # Calculate starting position for first elevator - centers all elevators in building
-        total_elevator_width = len(self.elevators) * self.ELEVATOR_WIDTH + (len(self.elevators) - 1) * self.ELEVATOR_SPACING
+        total_elevator_width = len(self.elevator_status) * self.ELEVATOR_WIDTH + (len(self.elevator_status) - 1) * self.ELEVATOR_SPACING
         elevator_start_x = building_x + (self.BUILDING_WIDTH - total_elevator_width) / 2
 
         # Draw each elevator
-        for elevator_id, elevator in self.elevators.items():
+        for elevator_id, elevator in self.elevator_status.items():
             # Calculate elevator position
             x = elevator_start_x + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
             y = elevator["current_position"]
@@ -252,10 +264,10 @@ class ElevatorVisualizer(QFrame):
         building_x = (width - self.BUILDING_WIDTH) / 2
 
         # Calculate starting position for first elevator
-        elevator_start_x = building_x + (self.BUILDING_WIDTH - (len(self.elevators) * self.ELEVATOR_WIDTH + (len(self.elevators) - 1) * self.ELEVATOR_SPACING)) / 2
+        elevator_start_x = building_x + (self.BUILDING_WIDTH - (len(self.elevator_status) * self.ELEVATOR_WIDTH + (len(self.elevator_status) - 1) * self.ELEVATOR_SPACING)) / 2
 
         # Draw each elevator
-        for elevator_id, elevator in self.elevators.items():
+        for elevator_id, elevator in self.elevator_status.items():
             # Calculate elevator position
             x = elevator_start_x + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
             y = elevator["current_position"]

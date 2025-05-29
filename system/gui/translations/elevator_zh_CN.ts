@@ -88,12 +88,40 @@
         <translation>电梯控制系统</translation>
     </message>
     <message>
-        <source>Reset Elevator System</source>
-        <translation>重置电梯系统</translation>
-    </message>
-    <message>
+        <source>Reset</source>
+        <translation>重置</translation>
+    </message>    <message>
         <source>Show Visualizer</source>
         <translation>可视化</translation>
+    </message>
+    <message>
+        <source>Configure Elevators</source>
+        <translation>配置电梯</translation>    </message>
+</context>
+<context>
+    <name>ConfigDialog</name>
+    <message>
+        <source>Elevator System Configuration</source>
+        <translation>电梯系统配置</translation>
+    </message>
+    <message>
+        <source>Number of Elevators:</source>
+        <translation>电梯数量:</translation>
+    </message>
+    <message>
+        <source>Floor Travel Duration:</source>
+        <translation>楼层移动时间:</translation>
+    </message>    <message>
+        <source>Door Operation Duration:</source>
+        <translation>门操作时间:</translation>
+    </message>
+    <message>
+        <source>Door Stay Duration:</source>
+        <translation>门保持开启时间:</translation>
+    </message>
+    <message>
+        <source>Note: Changing elevator count requires system restart.</source>
+        <translation>注意：更改电梯数量需要重启系统。</translation>
     </message>
 </context>
 <context>

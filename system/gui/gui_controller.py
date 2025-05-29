@@ -61,8 +61,9 @@ class GUIController(Controller):
                 await asyncio.sleep(0.02)
 
                 for eid, elevator in self.elevators.items():
-                    v.elevators[eid]["current_position"] = v.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
-                    v.elevators[eid]["door_percentage"] = elevator.door_position_percentage
+                    assert eid in v.elevator_status, f"Elevator {eid} not found in visualizer status"
+                    v.elevator_status[eid]["current_position"] = v.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
+                    v.elevator_status[eid]["door_percentage"] = elevator.door_position_percentage
 
                 v.update()
         except asyncio.CancelledError:
@@ -128,3 +129,10 @@ class GUIController(Controller):
     async def deselect_floor(self, floor: Floor, elevator_id: ElevatorId):
         self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(False)
         return await super().deselect_floor(floor, elevator_id)
+
+    def set_elevator_count(self, count: int):
+        if self.config.elevator_count == count:
+            return
+
+        self.window.set_elevator_count(count)
+        super().set_elevator_count(count)

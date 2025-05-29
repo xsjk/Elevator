@@ -33,6 +33,7 @@ class Controller:
     requests: set[FloorAction] = field(default_factory=set)  # External elevator call requests
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue for inter-component communication
     message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)  # Tasks for handling messages, each task should handle asyncio.CancelledError in its implementation
+    _started: bool = False  # Flag to indicate if the controller has been started
 
     def __post_init__(self):
         self.elevators = {
@@ -46,6 +47,57 @@ class Controller:
             )
             for i in range(1, self.config.elevator_count + 1)
         }
+
+    def set_config(self, **kwargs):
+        for key, value in kwargs.items():
+            # Special handling for elevator count
+            if key == "elevator_count":
+                self.set_elevator_count(value)
+                continue
+
+            # Other configuration keys
+            if hasattr(Config, key):
+                if getattr(self.config, key) == value:
+                    continue
+                setattr(self.config, key, value)
+                if hasattr(Elevator, key):
+                    for elevator in self.elevators.values():
+                        setattr(elevator, key, value)
+            else:
+                raise ValueError(f"Controller: Invalid configuration key '{key}'")
+
+    def set_elevator_count(self, count: int):
+        if count < 1:
+            raise ValueError("Controller: Elevator count must be at least 1")
+
+        # keep the existing elevators if count is less than current
+        if count < len(self.elevators):
+            for i in range(count + 1, len(self.elevators) + 1):
+                e = self.elevators.pop(i)
+                if e.started:
+                    asyncio.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
+
+        # add new elevators if count is more than current
+        elif count > len(self.elevators):
+            for i in range(len(self.elevators) + 1, count + 1):
+                self.elevators[i] = Elevator(
+                    id=i,
+                    queue=self.queue,
+                    floor_travel_duration=self.config.floor_travel_duration,
+                    accelerate_duration=self.config.accelerate_duration,
+                    door_move_duration=self.config.door_move_duration,
+                    door_stay_duration=self.config.door_stay_duration,
+                )
+                if self._started:
+                    self.elevators[i].start()
+
+        self.config.elevator_count = count
+
+    @property
+    def started(self) -> bool:
+        for e in self.elevators.values():
+            assert e.started == self._started, f"Controller: Elevator {e.id} started state mismatch: {e.started} != {self._started}"
+        return self._started
 
     async def reset(self):
         await self.stop()
@@ -62,10 +114,20 @@ class Controller:
         logger.info("Controller: Elevator system has been reset")
 
     def start(self, tg: asyncio.TaskGroup | None = None):
+        if self._started:
+            logger.warning("Controller: Already started, ignoring start request")
+            return
+
         for e in self.elevators.values():
             e.start(tg)
 
+        self._started = True
+
     async def stop(self):
+        if not self._started:
+            logger.warning("Controller: Not started, ignoring stop request")
+            return
+
         for e in self.elevators.values():
             await e.stop()
 
@@ -78,6 +140,8 @@ class Controller:
         assert len(self.requests) == 0
         for e in self.elevators.values():
             assert len(e.selected_floors) == 0
+
+        self._started = False
 
     def handle_message_task(self, message: str) -> asyncio.Task:
         assert message not in self.message_tasks, f"Controller: Message task for '{message}' already exists"

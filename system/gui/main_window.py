@@ -5,6 +5,10 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -12,18 +16,112 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QSpinBox,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from ..core.controller import Controller
+from ..core.controller import Config, Controller
 from ..utils.common import Direction, DoorState, Floor
 from .i18n import TranslationManager
 from .visualizer import ElevatorVisualizer
 
 tm: TranslationManager | None = None
+
+
+class ElevatorConfigDialog(QDialog):
+    """Configuration dialog for elevator system settings"""
+
+    def __init__(self, current_config: Config, parent=None):
+        super().__init__(parent)
+        self.current_config = current_config
+        self.setWindowTitle(QCoreApplication.translate("ConfigDialog", "Elevator System Configuration"))
+        self.setModal(True)
+        self.setMinimumWidth(300)
+
+        layout = QVBoxLayout(self)
+
+        # Create form layout for configuration options
+        self.form_layout = QFormLayout()  # Elevator count configuration
+        self.elevator_count_spinbox = QSpinBox()
+        self.elevator_count_spinbox.setRange(1, 10)  # Allow 1-10 elevators
+        self.elevator_count_spinbox.setValue(current_config.elevator_count)
+        self.elevator_count_label = QLabel(QCoreApplication.translate("ConfigDialog", "Number of Elevators:"))
+        self.form_layout.addRow(self.elevator_count_label, self.elevator_count_spinbox)
+
+        # Floor travel duration - using QDoubleSpinBox for decimal precision
+        self.floor_travel_spinbox = QDoubleSpinBox()
+        self.floor_travel_spinbox.setRange(0, 5.0)
+        self.floor_travel_spinbox.setSingleStep(0.1)
+        self.floor_travel_spinbox.setDecimals(1)
+        self.floor_travel_spinbox.setValue(current_config.floor_travel_duration)
+        self.floor_travel_spinbox.setSuffix(" s")
+        self.floor_travel_label = QLabel(QCoreApplication.translate("ConfigDialog", "Floor Travel Duration:"))
+        self.form_layout.addRow(self.floor_travel_label, self.floor_travel_spinbox)
+
+        # Door operation duration - using QDoubleSpinBox for decimal precision
+        self.door_duration_spinbox = QDoubleSpinBox()
+        self.door_duration_spinbox.setRange(0, 5.0)
+        self.door_duration_spinbox.setSingleStep(0.1)
+        self.door_duration_spinbox.setDecimals(1)
+        self.door_duration_spinbox.setValue(current_config.door_move_duration)
+        self.door_duration_spinbox.setSuffix(" s")
+        self.door_duration_label = QLabel(QCoreApplication.translate("ConfigDialog", "Door Operation Duration:"))
+        self.form_layout.addRow(self.door_duration_label, self.door_duration_spinbox)
+
+        # Door stay duration - new parameter
+        self.door_stay_spinbox = QDoubleSpinBox()
+        self.door_stay_spinbox.setRange(0, 10.0)
+        self.door_stay_spinbox.setSingleStep(0.1)
+        self.door_stay_spinbox.setDecimals(1)
+        self.door_stay_spinbox.setValue(current_config.door_stay_duration)
+        self.door_stay_spinbox.setSuffix(" s")
+        self.door_stay_label = QLabel(QCoreApplication.translate("ConfigDialog", "Door Stay Duration:"))
+        self.form_layout.addRow(self.door_stay_label, self.door_stay_spinbox)
+
+        layout.addLayout(self.form_layout)
+
+        # Add info label
+        self.info_label = QLabel(QCoreApplication.translate("ConfigDialog", "Note: Changing elevator count requires system restart."))
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(self.info_label)
+
+        # Button box
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        # Register as observer for language changes
+        if tm is not None:
+            tm.add_observer(self)
+
+    def get_config_values(self):
+        """Return the configured values"""
+        return {
+            "elevator_count": self.elevator_count_spinbox.value(),
+            "floor_travel_duration": float(self.floor_travel_spinbox.value()),
+            "door_move_duration": float(self.door_duration_spinbox.value()),
+            "door_stay_duration": float(self.door_stay_spinbox.value()),
+        }
+
+    def update_language(self):
+        """Update UI text when language changes"""
+        self.setWindowTitle(QCoreApplication.translate("ConfigDialog", "Elevator System Configuration"))
+        self.elevator_count_label.setText(QCoreApplication.translate("ConfigDialog", "Number of Elevators:"))
+        self.floor_travel_label.setText(QCoreApplication.translate("ConfigDialog", "Floor Travel Duration:"))
+        self.door_duration_label.setText(QCoreApplication.translate("ConfigDialog", "Door Operation Duration:"))
+        self.door_stay_label.setText(QCoreApplication.translate("ConfigDialog", "Door Stay Duration:"))
+        self.info_label.setText(QCoreApplication.translate("ConfigDialog", "Note: Changing elevator count requires system restart."))
+
+    def closeEvent(self, event):
+        """Handle dialog close event"""
+        if tm is not None:
+            tm.remove_observer(self)
+        super().closeEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -123,7 +221,7 @@ class MainWindow(QMainWindow):
 
         # Add reset button
         self.control_layout = QVBoxLayout()
-        self.reset_button = QPushButton(QCoreApplication.translate("MainWindow", "Reset Elevator System"))
+        self.reset_button = QPushButton(QCoreApplication.translate("MainWindow", "Reset"))
         self.reset_button.clicked.connect(lambda: self.elevator_controller.handle_message_task("reset"))
         self.control_layout.addWidget(self.reset_button)
         self.control_layout.addStretch()
@@ -133,6 +231,11 @@ class MainWindow(QMainWindow):
         if tm is not None:
             tm.add_observer(self)
 
+        # Add elevator configuration button
+        self.config_button = QPushButton(QCoreApplication.translate("MainWindow", "Configure Elevators"))
+        self.config_button.clicked.connect(self.open_elevator_config_dialog)
+        self.control_layout.addWidget(self.config_button)
+
     def toggle_visualizer(self, state):
         """Toggle the visibility of the elevator visualizer"""
         self.elevator_visualizer.setVisible(self.visualizer_toggle.isChecked())
@@ -140,17 +243,40 @@ class MainWindow(QMainWindow):
     def reset(self):
         """Reset the elevator system to its initial state"""
         # Reset UI state for all elevators dynamically
+        assert len(self.elevator_panels) == self.elevator_controller.config.elevator_count, "Elevator panels count does not match controller config"
+
         for eid, panel in self.elevator_panels.items():
             panel.reset_internal_buttons()
             # Determine initial floor from config, default to "1" if not available
             initial_floor_str = str(self.elevator_controller.config.default_floor)
             initial_floor = Floor(initial_floor_str)  # Convert to Floor enum object
-            panel.update_elevator_status(initial_floor, DoorState.CLOSED, Direction.IDLE)
             self.elevator_visualizer.update_elevator_status(eid, initial_floor, False, direction=Direction.IDLE)
 
         self.building_panel.reset_buttons()
 
         # Reset visualizer (if needed, or handled by controller events)
+
+    def set_elevator_count(self, count: int):
+        """Set the number of elevators in the gui"""
+
+        # Create or remove elevator panels based on the new count
+        elevator_panels_widget = self.elevator_panels[1].parent()  # Get the parent widget
+        elevator_panels_layout = elevator_panels_widget.layout()
+        if count < self.elevator_controller.config.elevator_count:
+            # Remove excess panels
+            for eid in range(count + 1, self.elevator_controller.config.elevator_count + 1):
+                panel = self.elevator_panels.pop(eid)
+                elevator_panels_layout.removeWidget(panel)
+                panel.deleteLater()
+        elif count > self.elevator_controller.config.elevator_count:
+            # Add new panels
+            for eid in range(self.elevator_controller.config.elevator_count + 1, count + 1):
+                panel = ElevatorPanel(eid, self.elevator_controller)
+                self.elevator_panels[eid] = panel
+                elevator_panels_layout.addWidget(panel)
+
+        # Create or remove elevator in visualizer
+        self.elevator_visualizer.set_elevator_count(count)
 
     def change_language(self, language):
         logging.debug(f"Changing language to {language}")
@@ -160,7 +286,20 @@ class MainWindow(QMainWindow):
     def update_language(self):
         logging.debug("Updating MainWindow language")
         self.setWindowTitle(QCoreApplication.translate("MainWindow", "Elevator Control System"))
-        self.reset_button.setText(QCoreApplication.translate("MainWindow", "Reset Elevator System"))
+        self.reset_button.setText(QCoreApplication.translate("MainWindow", "Reset"))
+        self.config_button.setText(QCoreApplication.translate("MainWindow", "Configure Elevators"))
+
+    def open_elevator_config_dialog(self):
+        """Open the elevator configuration dialog"""
+        dialog = ElevatorConfigDialog(self.elevator_controller.config, self)
+        if dialog.exec():
+            # Get the new configuration values
+            new_config_values = dialog.get_config_values()
+            self.elevator_controller.set_config(**new_config_values)
+
+            logging.info("Elevator configuration applied successfully.")
+
+        dialog.deleteLater()  # Use deleteLater() instead of destroy()
 
 
 class BuildingPanel(QFrame):
