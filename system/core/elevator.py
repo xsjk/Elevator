@@ -18,6 +18,7 @@ from ..utils.common import (
     Event,
     Floor,
     FloorAction,
+    FloorLike,
 )
 from ..utils.event_bus import event_bus
 
@@ -44,7 +45,7 @@ class TargetFloors(list[FloorAction]):
         self.direction = direction
         self.nonemptyEvent = asyncio.Event()
 
-    def add(self, floor: Floor, direction: Direction):
+    def add(self, floor: FloorLike, direction: Direction):
         assert direction in (Direction.IDLE, self.direction), f"Direction of requested action {direction.name} does not match the chain direction {self.direction.name}"
         bisect.insort(self, FloorAction(floor, direction), key=self.key)
         if not self.is_empty():
@@ -93,12 +94,15 @@ class TargetFloors(list[FloorAction]):
 
 
 class TargetFloorChains:
-    def __init__(self, event_loop: asyncio.AbstractEventLoop | asyncio.TaskGroup, direction: Direction = Direction.IDLE):
-        self.event_loop = event_loop
+    def __init__(self, direction: Direction = Direction.IDLE, event_loop: asyncio.AbstractEventLoop | asyncio.TaskGroup | None = None):
         self.current_chain = TargetFloors(direction)
         self.next_chain = TargetFloors(-direction)
         self.future_chain = TargetFloors(direction)
         self.swap_event = asyncio.Event()
+        if event_loop is None:
+            self.event_loop = asyncio.get_event_loop()
+        else:
+            self.event_loop = event_loop
 
     @property
     def direction(self) -> Direction:
@@ -243,7 +247,7 @@ class TargetFloorChains:
         self.future_chain.clear()
 
     def __copy__(self) -> Self:
-        c = self.__class__(self.event_loop, self.direction)
+        c = self.__class__(direction=self.direction, event_loop=self.event_loop)
         c.current_chain = self.current_chain.copy()
         c.next_chain = self.next_chain.copy()
         c.future_chain = self.future_chain.copy()
@@ -338,7 +342,7 @@ class Elevator:
         self.door_action_processed.clear()
         await self.door_action_processed.wait()
 
-    def commit_floor(self, floor: Floor, requested_direction: Direction = Direction.IDLE) -> asyncio.Event:
+    def commit_floor(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE) -> asyncio.Event:
         """
         Commit a floor to the elevator's list of target floors.
 
@@ -350,6 +354,7 @@ class Elevator:
             asyncio.Event: An event that will be set when the elevator arrives at the committed floor.
 
         """
+        floor = Floor(floor)
 
         if not self.move_loop_started:
             logger.warning(f"move_loop of elevator {self.id} was not started yet.")
@@ -360,7 +365,6 @@ class Elevator:
         if directed_floor in self.target_floor_chains:
             raise ValueError(f"Floor {floor} already in the action chain with direction {requested_direction.name}")
 
-        assert isinstance(floor, Floor)
         assert isinstance(requested_direction, Direction)
 
         target_direction = self.direction_to(floor)
@@ -422,7 +426,8 @@ class Elevator:
         self.events[directed_floor] = asyncio.Event()
         return self.events[directed_floor]
 
-    def cancel_commit(self, floor: Floor, requested_direction: Direction = Direction.IDLE):
+    def cancel_commit(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE):
+        floor = Floor(floor)
         directed_floor = FloorAction(floor, requested_direction)
         # Remove the action from the chain
         logger.debug(f"Elevator {self.id}: Cancelling floor {floor} with direction {requested_direction.name}")
@@ -433,7 +438,8 @@ class Elevator:
             self.events.pop(directed_floor).set()
             logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
 
-    def arrival_summary(self, floor: Floor, requested_direction: Direction) -> tuple[float, int]:
+    def arrival_summary(self, floor: FloorLike, requested_direction: Direction) -> tuple[float, int]:
+        floor = Floor(floor)
         directed_floor = FloorAction(floor, requested_direction)
         if directed_floor not in self.target_floor_chains:
             raise ValueError(f"Floor {floor} not in action chain")
@@ -720,7 +726,7 @@ class Elevator:
         else:
             self.event_loop = asyncio.get_event_loop()
 
-        self.target_floor_chains = TargetFloorChains(self.event_loop)
+        self.target_floor_chains = TargetFloorChains(event_loop=self.event_loop)
         self.door_idle_event.set()
         if not self.started:
             self.door_loop_task = tg.create_task(self._door_loop(), name=f"door_loop_elevator_{self.id} {__file__}:{inspect.stack()[0].lineno}")
@@ -771,7 +777,8 @@ class Elevator:
         return self._current_floor
 
     @current_floor.setter
-    def current_floor(self, new_floor: Floor):
+    def current_floor(self, new_floor: FloorLike):
+        new_floor = Floor(new_floor)
         if self._current_floor != new_floor:
             self._current_floor = new_floor
 
@@ -791,7 +798,8 @@ class Elevator:
 
         return self._current_floor
 
-    def direction_to(self, target_floor: Floor) -> Direction:
+    def direction_to(self, target_floor: FloorLike) -> Direction:
+        target_floor = Floor(target_floor)
         if target_floor > self.current_position:
             return Direction.UP
         elif target_floor < self.current_position:

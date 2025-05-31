@@ -5,9 +5,11 @@ import logging
 from PySide6.QtCore import QCoreApplication
 
 from ..core.controller import Config, Controller, Floor
-from ..utils.common import Direction, DoorState, ElevatorId, Event
+from ..utils.common import Direction, DoorState, ElevatorId, Event, FloorLike
 from ..utils.event_bus import event_bus
 from .main_window import MainWindow
+from .visualizer import ElevatorVisualizer
+from ..core.elevator import Elevator
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ class GUIController(Controller):
         event_bus.unsubscribe(Event.CALL_COMPLETED, self._on_call_completed)
         event_bus.unsubscribe(Event.FLOOR_ARRIVED, self._on_floor_arrived)
 
-    def _on_elevator_state_changed(self, elevator_id: ElevatorId, floor: Floor, door_state: DoorState, direction: Direction):
+    def _on_elevator_state_changed(self, elevator_id: ElevatorId, floor: FloorLike, door_state: DoorState, direction: Direction):
         """Handle elevator state change events"""
         try:
             self.window.elevator_panels[elevator_id].update_elevator_status(floor, door_state, direction)
@@ -49,10 +51,12 @@ class GUIController(Controller):
             logging.error(f"Error updating elevator UI: {e}")
             raise e
 
-    def _on_call_completed(self, floor: Floor, direction: Direction):
+    def _on_call_completed(self, floor: FloorLike, direction: Direction):
+        floor = Floor(floor)
         self.window.building_panel.clear_call_button(floor, direction)
 
-    def _on_floor_arrived(self, floor: Floor, elevator_id: ElevatorId):
+    def _on_floor_arrived(self, floor: FloorLike, elevator_id: ElevatorId):
+        floor = Floor(floor)
         self.window.elevator_panels[elevator_id].clear_floor_button(str(floor))
 
     async def _update_position(self):
@@ -69,7 +73,7 @@ class GUIController(Controller):
             logger.debug("Position update loop cancelled")
             pass
 
-    def _update_elevator_status(self, visualizer, elevator_id, elevator):
+    def _update_elevator_status(self, visualizer: ElevatorVisualizer, elevator_id: ElevatorId, elevator: Elevator):
         """Helper method to update elevator status in the visualizer."""
         if elevator_id in visualizer.elevator_status:
             visualizer.elevator_status[elevator_id]["current_position"] = visualizer.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
@@ -122,7 +126,8 @@ class GUIController(Controller):
         self.window.reset()
         await super().reset()
 
-    async def call_elevator(self, call_floor: Floor, call_direction: Direction):
+    async def call_elevator(self, call_floor: FloorLike, call_direction: Direction):
+        call_floor = Floor(call_floor)
         match call_direction:
             case Direction.UP:
                 self.window.building_panel.up_buttons[str(call_floor)].setChecked(True)
@@ -133,11 +138,13 @@ class GUIController(Controller):
 
         return await super().call_elevator(call_floor, call_direction)
 
-    async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
+    async def select_floor(self, floor: FloorLike, elevator_id: ElevatorId):
+        floor = Floor(floor)
         self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(True)
         return await super().select_floor(floor, elevator_id)
 
-    async def deselect_floor(self, floor: Floor, elevator_id: ElevatorId):
+    async def deselect_floor(self, floor: FloorLike, elevator_id: ElevatorId):
+        floor = Floor(floor)
         self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(False)
         return await super().deselect_floor(floor, elevator_id)
 

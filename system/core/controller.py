@@ -10,6 +10,7 @@ from ..utils.common import (
     ElevatorId,
     Event,
     Floor,
+    FloorLike,
     FloorAction,
 )
 from ..utils.event_bus import event_bus
@@ -217,7 +218,8 @@ class Controller:
     def calculate_duration(self, n_floors: float, n_stops: int) -> float:
         return n_floors * self.config.floor_travel_duration + n_stops * (self.config.door_move_duration * 2 + self.config.door_stay_duration)
 
-    def estimate_arrival_time(self, elevator: Elevator, target_floor: Floor, requested_direction: Direction) -> float:
+    def estimate_arrival_time(self, elevator: Elevator, target_floor: FloorLike, requested_direction: Direction) -> float:
+        target_floor = Floor(target_floor)
         old_level = logger.level
         logger.setLevel(logging.CRITICAL)
         elevator = elevator.copy()
@@ -236,8 +238,8 @@ class Controller:
         logger.debug(f"Controller: Estimation details - Elevator ID: {elevator.id}, Target Floor: {target_floor}, Requested Direction: {requested_direction.name}, Number of Floors: {n_floors}, Number of Stops: {n_stops}, Estimated Duration: {duration:.2f} seconds")
         return duration
 
-    async def call_elevator(self, call_floor: Floor, call_direction: Direction):
-        assert isinstance(call_floor, Floor)
+    async def call_elevator(self, call_floor: FloorLike, call_direction: Direction):
+        call_floor = Floor(call_floor)
         assert call_direction in (Direction.UP, Direction.DOWN)
 
         # Check if the call direction is already requested
@@ -267,8 +269,8 @@ class Controller:
             self.requests.remove(directed_target_floor)
             elevator.cancel_commit(call_floor, call_direction)
 
-    async def cancel_call(self, call_floor: Floor, call_direction: Direction):
-        assert isinstance(call_floor, Floor)
+    async def cancel_call(self, call_floor: FloorLike, call_direction: Direction):
+        call_floor = Floor(call_floor)
         assert call_direction in (Direction.UP, Direction.DOWN)
 
         directed_target_floor = FloorAction(call_floor, call_direction)
@@ -282,9 +284,8 @@ class Controller:
         await t
         assert directed_target_floor not in self.requests
 
-    async def select_floor(self, floor: Floor, elevator_id: ElevatorId):
-        assert isinstance(floor, Floor)
-        assert isinstance(elevator_id, ElevatorId)
+    async def select_floor(self, floor: FloorLike, elevator_id: ElevatorId):
+        floor = Floor(floor)
 
         elevator = self.elevators[elevator_id]
         if elevator.started is False:
@@ -306,9 +307,8 @@ class Controller:
             elevator.selected_floors.remove(floor)
             elevator.cancel_commit(floor, Direction.IDLE)
 
-    async def deselect_floor(self, floor: Floor, elevator_id: ElevatorId):
-        assert isinstance(floor, Floor)
-        assert isinstance(elevator_id, ElevatorId)
+    async def deselect_floor(self, floor: FloorLike, elevator_id: ElevatorId):
+        floor = Floor(floor)
 
         elevator = self.elevators[elevator_id]
 

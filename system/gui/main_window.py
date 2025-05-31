@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.controller import Config, Controller
-from ..utils.common import Direction, DoorState, Floor
+from ..utils.common import Direction, DoorState, Floor, FloorLike
 from .i18n import TranslationManager
 from .visualizer import ElevatorVisualizer
 
@@ -376,10 +376,11 @@ class BuildingPanel(QFrame):
         if tm is not None:
             tm.add_observer(self)
 
-    def clear_call_button(self, floor: Floor, direction: Direction):
+    def clear_call_button(self, floor: FloorLike, direction: Direction):
         # Clear a specific call button when the request is serviced
         # floor: Floor enum object
         # direction: Direction enum object
+        floor = Floor(floor)
         floor_str = str(floor)  # Convert Floor enum to string for key lookup
         if direction == Direction.UP and floor_str in self.up_buttons:
             self.up_buttons[floor_str].setChecked(False)
@@ -469,8 +470,8 @@ class ElevatorPanel(QFrame):
         if tm is not None:
             tm.add_observer(self)
 
-    def update_elevator_status(self, floor: Floor, door_state: DoorState, direction: Direction):
-        assert isinstance(floor, Floor), f"Expected Floor type, got {type(floor)}"
+    def update_elevator_status(self, floor: FloorLike, door_state: DoorState, direction: Direction):
+        floor = Floor(floor)
         assert isinstance(door_state, DoorState), f"Expected DoorState type, got {type(door_state)}"
         assert isinstance(direction, Direction), f"Expected Direction type, got {type(direction)}"
 

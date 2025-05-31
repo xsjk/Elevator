@@ -73,8 +73,14 @@ class ElevatorState(IntEnum):
         return self in (ElevatorState.MOVING_UP, ElevatorState.MOVING_DOWN)
 
 
+type ElevatorId = int
+type FloorLike = Floor | int | str
+
+
 class Floor(int):
-    def __new__(cls, value: str | int) -> Self:
+    def __new__(cls, value: FloorLike) -> Self:
+        if isinstance(value, cls):
+            return value
         index = int(value)
         if index < 0:
             index += 1
@@ -127,12 +133,9 @@ class Floor(int):
                 return False
 
 
-ElevatorId = int
-
-
-class FloorAction(tuple):
-    def __new__(cls, floor: Floor, direction: Direction):
-        return super().__new__(cls, (floor, direction))
+class FloorAction(tuple[Floor, Direction]):
+    def __new__(cls, floor: FloorLike, direction: Direction):
+        return super().__new__(cls, (Floor(floor), direction))
 
     def __repr__(self) -> str:
         return f"({self[0]}, {self[1].name})"
@@ -142,7 +145,7 @@ class FloorAction(tuple):
         return self[0]
 
     @property
-    def direction(self) -> Floor:
+    def direction(self) -> Direction:
         return self[1]
 
 

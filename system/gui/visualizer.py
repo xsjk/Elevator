@@ -5,7 +5,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
 from PySide6.QtWidgets import QFrame
 
-from ..utils.common import Direction, ElevatorId, Floor
+from ..utils.common import Direction, ElevatorId, Floor, FloorLike
 
 
 class ElevatorVisualizer(QFrame):
@@ -131,7 +131,8 @@ class ElevatorVisualizer(QFrame):
 
         return positions
 
-    def update_elevator_status(self, elevator_id: ElevatorId, floor: Floor, door_open: bool, direction: Direction):
+    def update_elevator_status(self, elevator_id: ElevatorId, floor: FloorLike, door_open: bool, direction: Direction):
+        floor = Floor(floor)
         """Update the state of an elevator"""
         if elevator_id not in self.elevator_status:
             logging.warning(f"Invalid elevator ID: {elevator_id}")
