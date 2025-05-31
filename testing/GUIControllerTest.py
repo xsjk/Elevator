@@ -1,13 +1,12 @@
+import os
+import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
-import asyncio
-import sys
-import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from system.gui.gui_controller import GUIController
-from system.utils.common import Direction, DoorState
-from system.utils.common import ElevatorId
+from system.utils.common import Direction, ElevatorId
+
 
 class TestGUIController(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -16,8 +15,10 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
         self.controller.window = self.mock_window
 
     def test_setup_event_handlers_and_unsubscribe(self):
-        with patch("system.gui.gui_controller.event_bus.subscribe") as subscribe_mock, \
-             patch("system.gui.gui_controller.event_bus.unsubscribe") as unsubscribe_mock:
+        with (
+            patch("system.gui.gui_controller.event_bus.subscribe") as subscribe_mock,
+            patch("system.gui.gui_controller.event_bus.unsubscribe") as unsubscribe_mock,
+        ):
             self.controller._setup_event_handlers()
             self.assertEqual(subscribe_mock.call_count, 4)
 
@@ -125,6 +126,7 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             self.controller.set_elevator_count(5)
             self.controller.window.set_elevator_count.assert_not_called()
             super_set.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

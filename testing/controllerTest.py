@@ -1,15 +1,14 @@
-import unittest
 import asyncio
-import sys
 import os
+import sys
+import unittest
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from system.core.controller import Controller, Config
-from system.utils.common import Floor, Direction
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from system.core.controller import Config, Controller
+from system.utils.common import Direction, Floor
 
 
 class TestController(unittest.IsolatedAsyncioTestCase):
-
     async def asyncSetUp(self):
         self.controller = Controller(config=Config())
         self.controller.start()
@@ -27,7 +26,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
     async def test_handle_call_up(self):
         await self.controller.handle_message("call_up@2")
         self.assertEqual(self.controller.elevators[1].current_floor, 2)
-     
+
     async def test_handle_call_down(self):
         await self.controller.handle_message("call_down@3")
         self.assertEqual(self.controller.elevators[1].current_floor, 3)
@@ -88,9 +87,8 @@ class TestController(unittest.IsolatedAsyncioTestCase):
 
     async def test_calculate_duration(self):
         duration = self.controller.calculate_duration(3, 2)
-        expected = 3 * self.controller.config.floor_travel_duration + \
-                   2 * (self.controller.config.door_move_duration * 2 + self.controller.config.door_stay_duration)
-        self.assertEqual(duration, expected) # 19.0
+        expected = 3 * self.controller.config.floor_travel_duration + 2 * (self.controller.config.door_move_duration * 2 + self.controller.config.door_stay_duration)
+        self.assertEqual(duration, expected)  # 19.0
 
     async def test_estimate_arrival_time_cases(self):
         elevator = self.controller.elevators[1].copy()
@@ -116,7 +114,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
 
     async def test_call_elevator(self):
         await self.controller.call_elevator(Floor("2"), Direction.UP)
-        self.assertEqual(self.controller.elevators[1].current_floor, 2) 
+        self.assertEqual(self.controller.elevators[1].current_floor, 2)
         self.assertNotIn((Floor("2"), Direction.UP), self.controller.requests)
 
     async def test_select_floor(self):
@@ -133,5 +131,6 @@ class TestController(unittest.IsolatedAsyncioTestCase):
         await self.controller.close_door(elevator)
         self.assertFalse(elevator.door_open)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

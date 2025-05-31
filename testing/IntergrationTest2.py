@@ -1,31 +1,15 @@
 import asyncio
+import os
 import sys
 import unittest
-from PySide6.QtWidgets import QApplication
-import sys
-import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from system.gui.gui_controller import GUIController
-from system.utils.common import ElevatorState, DoorState, Floor, Direction
+from common import GUIAsyncioTestCase
 
-class ElevatorTest(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        if QApplication.instance() is None:
-            self.app = QApplication(sys.argv)
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from system.utils.common import ElevatorState, Floor
 
-        self.controller = GUIController()
-        self.controller.start()
-        self.controller.window.hide()
-        self.window = self.controller.window
 
-        self.building = self.window.building_panel
-
-        self.elevator1_UI = self.window.elevator_panels[1]
-        self.elevator2_UI = self.window.elevator_panels[2]
-        self.elevator1 = self.controller.elevators[1]
-        self.elevator2 = self.controller.elevators[2]
-
+class ElevatorTest(GUIAsyncioTestCase):
     async def test_complex_sequence_integration(self):
         # Step 1: press down button on floor 2 (external)
         self.building.down_buttons["2"].click()
@@ -76,6 +60,7 @@ class ElevatorTest(unittest.IsolatedAsyncioTestCase):
 
         # 最终确认状态
         self.assertEqual(self.elevator2.state, ElevatorState.CLOSING_DOOR)
+
 
 if __name__ == "__main__":
     unittest.main()
