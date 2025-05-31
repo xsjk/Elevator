@@ -1,9 +1,7 @@
 import asyncio
 import unittest
 
-from common import GUIAsyncioTestCase
-
-from system.utils.common import DoorState, Floor
+from common import DoorState, Floor, GUIAsyncioTestCase
 
 
 class ElevatorUITest(GUIAsyncioTestCase):
@@ -69,4 +67,7 @@ class ElevatorUITest(GUIAsyncioTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

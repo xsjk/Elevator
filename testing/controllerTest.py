@@ -1,16 +1,12 @@
 import asyncio
-import os
-import sys
 import unittest
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from system.core.controller import Config, Controller
-from system.utils.common import Direction, Floor
+from common import Controller, Direction, Floor, GUIAsyncioTestCase
 
 
-class TestController(unittest.IsolatedAsyncioTestCase):
+class TestController(GUIAsyncioTestCase):
     async def asyncSetUp(self):
-        self.controller = Controller(config=Config())
+        self.controller = Controller()
         self.controller.start()
         await asyncio.sleep(0.1)
 
@@ -94,19 +90,19 @@ class TestController(unittest.IsolatedAsyncioTestCase):
         elevator = self.controller.elevators[1].copy()
 
         # Test Case 1: Same floor, IDLE
-        elevator._current_floor = Floor("1")
+        elevator.current_floor = Floor("1")
         elevator.target_floor_chains.clear()
         time_same = self.controller.estimate_arrival_time(elevator, Floor("1"), Direction.IDLE)
         self.assertAlmostEqual(time_same, 5.0, delta=0.1)
 
         # Test Case 2: Target floor is above, 3 floors away, no stops
-        elevator._current_floor = Floor("1")
+        elevator.current_floor = Floor("1")
         elevator.target_floor_chains.clear()
         time_up = self.controller.estimate_arrival_time(elevator, Floor("4"), Direction.UP)
         self.assertAlmostEqual(time_up, 13.0, delta=0.1)
 
         # Test Case 3: Elevator is moving
-        elevator._current_floor = Floor("5")
+        elevator.current_floor = Floor("5")
         elevator.target_floor_chains.clear()
         elevator.commit_floor(Floor("4"), Direction.DOWN)
         time_down = self.controller.estimate_arrival_time(elevator, Floor("3"), Direction.DOWN)
@@ -133,4 +129,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

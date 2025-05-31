@@ -1,28 +1,22 @@
 import unittest
-import asyncio
-import sys
-import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from system.core.elevator import TargetFloorChains
-from system.utils.common import FloorAction, Direction 
+from common import Direction, FloorAction, TargetFloorChains
+
 
 class TestTargetFloorChains(unittest.TestCase):
-
     def setUp(self):
-        self.chains = TargetFloorChains(Direction.DOWN)
+        self.chains = TargetFloorChains()
 
     def testdirection(self):
-        self.chains = TargetFloorChains(Direction.UP)
+        self.chains.direction = Direction.UP
         self.assertEqual(self.chains.current_chain.direction, Direction.UP)
         self.assertEqual(self.chains.next_chain.direction, Direction.DOWN)
         self.assertEqual(self.chains.future_chain.direction, Direction.UP)
 
     def test_swap_and_pop(self):
-        self.chains = TargetFloorChains(Direction.UP)
         # TestCase 1:
         with self.assertRaises(IndexError):
-            result = self.chains.pop()
+            self.chains.pop()
 
         # TestCase of _swap_chains()
         # TestCase 2 of pop():
@@ -37,7 +31,7 @@ class TestTargetFloorChains(unittest.TestCase):
         self.chains.current_chain.add(3, Direction.DOWN)
         result_2 = self.chains.pop()
         self.assertEqual(result_2, FloorAction(3, Direction.DOWN))
-        
+
         # TestCase 4
         self.chains.direction = Direction.IDLE
         self.chains.current_chain.add(3, Direction.IDLE)
@@ -59,12 +53,12 @@ class TestTargetFloorChains(unittest.TestCase):
         self.assertEqual(len(self.chains), 0)
 
     def test_top(self):
-        self.chains = TargetFloorChains(Direction.UP)
+        self.chains.direction = Direction.UP
         self.chains.future_chain.add(3, Direction.UP)
         self.assertEqual(self.chains.top(), FloorAction(3, Direction.UP))
 
     def test_remove(self):
-        self.chains = TargetFloorChains(Direction.UP)
+        self.chains.direction = Direction.UP
         a1 = FloorAction(1, Direction.UP)
         a4 = FloorAction(2, Direction.UP)
         a2 = FloorAction(2, Direction.DOWN)
@@ -75,7 +69,7 @@ class TestTargetFloorChains(unittest.TestCase):
         self.chains.next_chain.add(2, Direction.DOWN)
         self.chains.next_chain.add(3, Direction.DOWN)
         self.chains.future_chain.add(3, Direction.UP)
-        
+
         # TestCase 1
         self.chains.remove(a2)
         self.assertNotIn(a2, self.chains.next_chain)
@@ -99,7 +93,6 @@ class TestTargetFloorChains(unittest.TestCase):
         self.assertEqual(self.chains.direction, Direction.IDLE)
 
     def testis_empty(self):
-        self.chains = TargetFloorChains(Direction.IDLE)
         # TestCase 1
         self.assertTrue(self.chains.is_empty())
 
@@ -108,7 +101,7 @@ class TestTargetFloorChains(unittest.TestCase):
         self.chains.next_chain.add(2, Direction.IDLE)
 
     def test_clear_and_len(self):
-        self.chains = TargetFloorChains(Direction.DOWN)
+        self.chains.direction = Direction.DOWN
         # TestCase of _len_()
         self.chains.current_chain.add(1, Direction.DOWN)
         self.chains.next_chain.add(2, Direction.UP)
@@ -119,7 +112,6 @@ class TestTargetFloorChains(unittest.TestCase):
         self.assertEqual(len(self.chains), 0)
 
     def test_copy(self):
-        self.chains = TargetFloorChains(Direction.IDLE)
         a = FloorAction(1, Direction.IDLE)
         self.chains.current_chain.add(1, Direction.IDLE)
         new_chains = self.chains.__copy__()
@@ -127,7 +119,6 @@ class TestTargetFloorChains(unittest.TestCase):
         self.assertIsNot(self.chains.current_chain, new_chains.current_chain)
 
     def test_contains_and_getitem(self):
-        self.chains = TargetFloorChains(Direction.IDLE)
         a1 = FloorAction(1, Direction.IDLE)
         a2 = FloorAction(2, Direction.IDLE)
         a3 = FloorAction(3, Direction.IDLE)
@@ -154,4 +145,7 @@ class TestTargetFloorChains(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

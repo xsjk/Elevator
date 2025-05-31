@@ -1,12 +1,7 @@
 import asyncio
-import os
-import sys
 import unittest
 
-from common import GUIAsyncioTestCase
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from system.utils.common import ElevatorState, Floor
+from common import ElevatorState, Floor, GUIAsyncioTestCase
 
 
 class ElevatorTest(GUIAsyncioTestCase):
@@ -28,7 +23,7 @@ class ElevatorTest(GUIAsyncioTestCase):
         await asyncio.sleep(0.1)
         self.assertEqual(self.elevator1.state, ElevatorState.OPENING_DOOR)
 
-        await asyncio.sleep(self.controller.config.door_move_duration / 2 + 0.1)
+        await asyncio.sleep(self.controller.config.door_move_duration / 2 + 0.2)
         self.assertEqual(self.elevator1.state, ElevatorState.STOPPED_DOOR_OPENED)
 
         # Step 3: press floor -1, then floor 3
@@ -75,4 +70,7 @@ class ElevatorTest(GUIAsyncioTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

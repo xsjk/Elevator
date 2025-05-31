@@ -2,12 +2,10 @@ import unittest
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from system.core.elevator import TargetFloors
-from system.utils.common import FloorAction, Direction 
+from common import FloorAction, Direction, TargetFloorChains
+
 
 class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
-
     def setUp(self):
         self.up = Direction.UP
         self.down = Direction.DOWN
@@ -18,7 +16,7 @@ class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
         # TestCase 1
         with self.assertRaises(AssertionError):
             tf.add(2, self.down)
-        
+
         # TestCase 2
         self.assertFalse(tf.nonemptyEvent.is_set())
 
@@ -35,7 +33,7 @@ class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
         tf.add(1, self.up)
         tf.remove(FloorAction(3, self.up))
         # TestCase 1
-        self.assertNotIn(FloorAction(3, self.up) ,tf)
+        self.assertNotIn(FloorAction(3, self.up), tf)
 
         # TestCase 2
         tf.remove(FloorAction(1, self.up))
@@ -85,10 +83,7 @@ class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
         tf.add(2, self.down)
 
         sorted_actions = sorted(tf, key=tf.key)
-        expected_order = [
-            FloorAction(2, Direction.DOWN),
-            FloorAction(1, Direction.DOWN)
-        ]
+        expected_order = [FloorAction(2, Direction.DOWN), FloorAction(1, Direction.DOWN)]
         self.assertEqual(tf.direction, self.down)
         self.assertEqual(sorted_actions, expected_order)
 
@@ -104,14 +99,11 @@ class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
         tf.pop()
         tf.pop()
         tf.direction = self.up
-        
+
         tf.add(2, self.up)
         tf.add(1, self.up)
         sorted_actions_up = sorted(tf, key=tf.key)
-        expected_order_up = [
-            FloorAction(1, Direction.UP),
-            FloorAction(2, Direction.UP)
-        ]
+        expected_order_up = [FloorAction(1, Direction.UP), FloorAction(2, Direction.UP)]
         self.assertEqual(tf.direction, self.up)
         self.assertEqual(sorted_actions_up, expected_order_up)
 
@@ -122,5 +114,9 @@ class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tf.direction, self.idle)
         self.assertIsNone(tf.key)
 
+
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

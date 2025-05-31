@@ -1,13 +1,10 @@
 import asyncio
 import bisect
 import inspect
-import logging
 from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
 from typing import Iterator, Self, SupportsIndex
-
-from rich.logging import RichHandler
 
 from ..utils.common import (
     Direction,
@@ -21,16 +18,7 @@ from ..utils.common import (
     FloorLike,
 )
 from ..utils.event_bus import event_bus
-
-logging.basicConfig(
-    level="INFO",
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler()],
-)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from .logger import logger
 
 
 class TargetFloors(list[FloorAction]):
@@ -94,15 +82,23 @@ class TargetFloors(list[FloorAction]):
 
 
 class TargetFloorChains:
-    def __init__(self, direction: Direction = Direction.IDLE, event_loop: asyncio.AbstractEventLoop | asyncio.TaskGroup | None = None):
-        self.current_chain = TargetFloors(direction)
-        self.next_chain = TargetFloors(-direction)
-        self.future_chain = TargetFloors(direction)
+    def __init__(
+        self,
+        event_loop: asyncio.AbstractEventLoop | asyncio.TaskGroup | None = None,
+        exit_event: asyncio.Event | None = None,
+    ):
+        self.current_chain = TargetFloors(Direction.IDLE)
+        self.next_chain = TargetFloors(Direction.IDLE)
+        self.future_chain = TargetFloors(Direction.IDLE)
         self.swap_event = asyncio.Event()
         if event_loop is None:
             self.event_loop = asyncio.get_event_loop()
         else:
             self.event_loop = event_loop
+        if exit_event is None:
+            self.exit_event = asyncio.Event()
+        else:
+            self.exit_event = exit_event
 
     @property
     def direction(self) -> Direction:
@@ -156,6 +152,22 @@ class TargetFloorChains:
     def top(self) -> FloorAction:
         return next(iter(self))
 
+    async def _wait_event(self, e: asyncio.Event):
+        if isinstance(self.event_loop, asyncio.AbstractEventLoop):
+            try:
+                running_loop = asyncio.events.get_running_loop()
+            except RuntimeError:
+                pass
+            else:
+                assert running_loop is self.event_loop, "The event loop is not the same as the one used in this TargetFloorChains instance"
+                await e.wait()
+
+        elif isinstance(self.event_loop, asyncio.TaskGroup):
+            await e.wait()
+
+        else:
+            raise TypeError(f"Unsupported event loop type: {type(self.event_loop)}")
+
     async def get(self) -> FloorAction:
         wait_tasks = []
         try:
@@ -172,33 +184,18 @@ class TargetFloorChains:
                         self.next_chain.nonemptyEvent,
                         self.future_chain.nonemptyEvent,
                         self.swap_event,
+                        self.exit_event,
                     ],
                 ):
-                    if isinstance(self.event_loop, asyncio.AbstractEventLoop):
-
-                        async def wait_event(e: asyncio.Event):
-                            try:
-                                running_loop = asyncio.events.get_running_loop()
-                            except RuntimeError:
-                                pass
-                            else:
-                                assert running_loop is self.event_loop
-                                await e.wait()
-
-                    elif isinstance(self.event_loop, asyncio.TaskGroup):
-
-                        async def wait_event(e: asyncio.Event):
-                            await e.wait()
-
-                    else:
-                        raise TypeError(f"Unsupported event loop type: {type(self.event_loop)}")
-
-                    wait_tasks.append(self.event_loop.create_task(wait_event(e), name=f"wait {name} {__file__}:{inspect.stack()[0].lineno}"))
+                    wait_tasks.append(self.event_loop.create_task(self._wait_event(e), name=f"wait {name} {__file__}:{inspect.stack()[0].lineno}"))
 
                 await asyncio.wait(
                     wait_tasks,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
+
+                if self.exit_event.is_set():
+                    raise asyncio.CancelledError()
 
                 # If swap_event is set, reset it and continue the loop
                 if self.swap_event.is_set():
@@ -210,11 +207,12 @@ class TargetFloorChains:
         finally:
             for task in wait_tasks:
                 if not task.done():
-                    task.cancel()
+                    task.cancel("exit")
                     try:
                         await task
-                    except asyncio.CancelledError:
-                        pass
+                    except asyncio.CancelledError as e:
+                        if str(e) != "exit":
+                            raise e
                     finally:
                         assert task.cancelled() or task.done()
 
@@ -247,7 +245,7 @@ class TargetFloorChains:
         self.future_chain.clear()
 
     def __copy__(self) -> Self:
-        c = self.__class__(direction=self.direction, event_loop=self.event_loop)
+        c = self.__class__(event_loop=self.event_loop)
         c.current_chain = self.current_chain.copy()
         c.next_chain = self.next_chain.copy()
         c.future_chain = self.future_chain.copy()
@@ -304,7 +302,7 @@ class Elevator:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # the queue to put events in
     door_idle_event: asyncio.Event = field(default_factory=asyncio.Event)  # exclusive lock for move and door
 
-    _current_floor: Floor = Floor("1")  # Initial floor
+    _current_floor: Floor = Floor(1)  # Initial floor
     _state: ElevatorState = ElevatorState.STOPPED_DOOR_CLOSED
     selected_floors: set[Floor] = field(default_factory=set)  # Internal button target floors
 
@@ -522,7 +520,7 @@ class Elevator:
         """
         Main loop for the elevator. This function will be called in a separate async task.
 
-        It really updates `self.current_floor` and `self.door_state` attributes.
+        It really updates `self.current_floor`.
         It should also trigger the update of the animation of the elevator.
         """
         try:
@@ -633,7 +631,9 @@ class Elevator:
                 await asyncio.sleep(self.door_stay_duration)
                 await close_door()
 
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as e:
+                if len(e.args) == 0:  # no message provided
+                    raise e  # the task was cancelled because of the program exit
                 match self.state:
                     case ElevatorState.OPENING_DOOR:
                         logger.debug(f"Elevator {self.id}: Door opening cancelled")
@@ -657,7 +657,9 @@ class Elevator:
                 self.door_idle_event.set()
                 assert self.door_idle_event.is_set()
 
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as e:
+                if len(e.args) == 0:
+                    raise e
                 logger.debug(f"Elevator {self.id}: Door closing cancelled")
 
         task: asyncio.Task | None = None
@@ -681,7 +683,7 @@ class Elevator:
                         assert self._door_last_state_change_time is not None
 
                         if action == DoorDirection.OPEN:
-                            task.cancel()
+                            task.cancel("request door open")
                             await task
                             assert task.cancelled() or task.done()
                             duration = self.event_loop.time() - self._door_last_state_change_time
@@ -694,7 +696,7 @@ class Elevator:
                         assert task is not None
                         if action == DoorDirection.CLOSE:
                             assert not self.door_idle_event.is_set()
-                            task.cancel()  # cancel the stay duration if it is running
+                            task.cancel("request door close")  # cancel the stay duration if it is running
                             await task
                             assert task.cancelled() or task.done()
                             task = asyncio.create_task(close_door(), name=f"close_door_{__file__}:{inspect.stack()[0].lineno}")
@@ -706,7 +708,7 @@ class Elevator:
             pass
         finally:
             if task is not None and not task.done():
-                task.cancel()
+                task.cancel("exit")
                 await task
                 assert task.cancelled() or task.done()
             self.door_loop_started = False
@@ -726,7 +728,8 @@ class Elevator:
         else:
             self.event_loop = asyncio.get_event_loop()
 
-        self.target_floor_chains = TargetFloorChains(event_loop=self.event_loop)
+        self.exit_event = asyncio.Event()
+        self.target_floor_chains = TargetFloorChains(event_loop=self.event_loop, exit_event=self.exit_event)
         self.door_idle_event.set()
         if not self.started:
             self.door_loop_task = tg.create_task(self._door_loop(), name=f"door_loop_elevator_{self.id} {__file__}:{inspect.stack()[0].lineno}")
@@ -736,9 +739,12 @@ class Elevator:
         if not self.started:
             return
 
+        self.exit_event.set()
+
         tasks = (self.door_loop_task, self.move_loop_task)
         for t in tasks:
             t.cancel()
+
         for t in tasks:
             await t
 
@@ -835,6 +841,8 @@ class Elevator:
                 p = 0.0
         if p > 1:
             p = 1.0
+        elif p < 0:
+            p = 0.0
         assert 0 <= p <= 1, f"Door position percentage {p} is out of bounds [0, 1]"
         return p
 
@@ -856,12 +864,12 @@ if __name__ == "__main__":
                 e.start(tg)
 
                 await asyncio.sleep(1)
-                e.commit_floor(Floor("2"), Direction.UP)
-                e.commit_floor(Floor("2"), Direction.DOWN)
+                e.commit_floor(2, Direction.UP)
+                e.commit_floor(2, Direction.DOWN)
 
                 await asyncio.sleep(0.5)
-                e.commit_floor(Floor("3"), Direction.IDLE)
-                e.commit_floor(Floor("-1"), Direction.IDLE)
+                e.commit_floor(3, Direction.IDLE)
+                e.commit_floor(-1, Direction.IDLE)
 
                 while True:
                     logger.info(await e.queue.get())

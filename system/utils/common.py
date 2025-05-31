@@ -1,5 +1,5 @@
 from enum import IntEnum, auto
-from typing import Self
+from typing import Self, overload
 
 
 class Event(IntEnum):
@@ -93,7 +93,13 @@ class Floor(int):
     def __repr__(self) -> str:
         return f"Floor({str(self)})"
 
-    def __add__(self, other: int) -> Self:
+    @overload
+    def __add__(self, other: int) -> Self: ...
+
+    @overload
+    def __add__(self, other: float) -> float: ...
+
+    def __add__(self, other):
         if isinstance(other, int):
             return super().__new__(self.__class__, int(self) + other)
         elif isinstance(other, float):
@@ -101,8 +107,19 @@ class Floor(int):
         else:
             raise TypeError(f"Unsupported operand type(s) for +: 'Floor' and '{type(other).__name__}'")
 
-    def __sub__(self, other: int) -> Self:
-        if isinstance(other, int):
+    @overload
+    def __sub__(self, other: Self) -> int: ...
+
+    @overload
+    def __sub__(self, other: int) -> Self: ...
+
+    @overload
+    def __sub__(self, other: float) -> float: ...
+
+    def __sub__(self, other):
+        if isinstance(other, self.__class__):
+            return int(self) - int(other)
+        elif isinstance(other, int):
             return super().__new__(self.__class__, int(self) - other)
         elif isinstance(other, float):
             return float(self) - other
@@ -149,15 +166,11 @@ class FloorAction(tuple[Floor, Direction]):
         return self[1]
 
 
-class DoorAction(tuple):
-    def __new__(cls, DoorDirection: DoorDirection):
-        return super().__new__(cls, (DoorDirection,))
-
-
 if __name__ == "__main__":
     # Example usage
     floor1 = Floor("1")
     floor2 = Floor("2")
+    print(type(floor2 - floor1))
     print(floor1)  # Output: 1
     print(floor2)  # Output: 2
     floor1 -= 1

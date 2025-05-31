@@ -1,9 +1,7 @@
 import asyncio
 import unittest
 
-from common import GUIAsyncioTestCase
-
-from system.utils.common import DoorState, ElevatorState, Floor
+from common import DoorState, ElevatorState, Floor, GUIAsyncioTestCase
 
 
 class SystemTestOpenDoor(GUIAsyncioTestCase):

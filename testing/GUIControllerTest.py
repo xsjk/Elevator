@@ -1,11 +1,7 @@
-import os
-import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from system.gui.gui_controller import GUIController
-from system.utils.common import Direction, ElevatorId, FloorLike
+from common import GUIController, Direction, ElevatorId, FloorLike
 
 
 class TestGUIController(unittest.IsolatedAsyncioTestCase):
@@ -129,4 +125,7 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

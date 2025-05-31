@@ -24,7 +24,7 @@ class Config:
     door_move_duration: float = 1.0  # Time for elevator door to move (seconds)
     door_stay_duration: float = 3.0  # Time elevator door remains open (seconds)
     floors: tuple[str, ...] = ("-1", "1", "2", "3")  # Floors in the building
-    default_floor: Floor = Floor("1")  # Default floor to start from
+    default_floor: Floor = Floor(1)  # Default floor to start from
     elevator_count: int = 2  # Number of elevators in the building
 
 

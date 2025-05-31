@@ -1,18 +1,21 @@
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
-import sys
-from PySide6.QtWidgets import QApplication
+
 from PySide6.QtGui import QColor
-import os
+from PySide6.QtWidgets import QApplication
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from system.gui.visualizer import ElevatorVisualizer  
-from system.utils.common import Floor, Direction, ElevatorId
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from system.gui.visualizer import ElevatorVisualizer
+from system.utils.common import Direction, Floor
 
-
-app = QApplication(sys.argv)  # Qt 应用上下文
 
 class TestElevatorVisualizer(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication(sys.argv)
+
     def setUp(self):
         self.floors = [Floor(-1), Floor(1), Floor(2), Floor(3)]
         self.elevator_count = 2
@@ -33,7 +36,7 @@ class TestElevatorVisualizer(unittest.TestCase):
     # TestCase 1
     def test_update_theme_colors_dark_mode(self):
         # Patch palette and QColor.lightness() to simulate dark mode
-        with patch.object(self.visualizer, 'palette') as mock_palette:
+        with patch.object(self.visualizer, "palette") as mock_palette:
             dark_color = MagicMock(spec=QColor)
             dark_color.lightness.return_value = 50  # simulate dark mode
             mock_palette.return_value.color.return_value = dark_color
@@ -50,7 +53,7 @@ class TestElevatorVisualizer(unittest.TestCase):
     # TestCase 2
     def test_update_theme_colors_light_mode(self):
         # Patch palette and QColor.lightness() to simulate light mode
-        with patch.object(self.visualizer, 'palette') as mock_palette:
+        with patch.object(self.visualizer, "palette") as mock_palette:
             light_color = MagicMock(spec=QColor)
             light_color.lightness.return_value = 200  # simulate light mode
             mock_palette.return_value.color.return_value = light_color
@@ -63,16 +66,17 @@ class TestElevatorVisualizer(unittest.TestCase):
             self.assertEqual(self.visualizer.idle_color, QColor(100, 100, 100))
             self.assertEqual(self.visualizer.door_color, QColor(200, 200, 200))
             self.assertEqual(self.visualizer.door_open_color, QColor(50, 50, 50))
-    
+
     def test_floor_positions_sorted(self):
         positions = list(self.visualizer.floor_positions.keys())
         self.assertEqual(positions, sorted(self.floors))
 
     def test_change_event_palette(self):
         from PySide6.QtCore import QEvent
+
         event = QEvent(QEvent.Type.PaletteChange)
         self.visualizer.changeEvent(event)  # 仅测试是否正常调用
-    
+
     def test_calculate_floor_positions(self):
         # 设置控件尺寸以确保 height 可用
         self.visualizer.resize(200, 400)  # 宽度无关紧要，关键是高度
@@ -88,12 +92,11 @@ class TestElevatorVisualizer(unittest.TestCase):
         for i in range(len(expected_floors) - 1):
             upper = expected_floors[i]
             lower = expected_floors[i + 1]
-            self.assertLess(floor_positions[upper], floor_positions[lower],
-                            msg=f"Floor {upper} (Y={floor_positions[upper]}) should be above Floor {lower} (Y={floor_positions[lower]})")
+            self.assertLess(floor_positions[upper], floor_positions[lower], msg=f"Floor {upper} (Y={floor_positions[upper]}) should be above Floor {lower} (Y={floor_positions[lower]})")
 
     # TestCase 1
     def test_update_elevator_status_valid(self):
-        self.visualizer.update_elevator_status(ElevatorId(1), Floor(2), True, Direction.UP)
+        self.visualizer.update_elevator_status(1, Floor(2), True, Direction.UP)
         status = self.visualizer.elevator_status[1]
         self.assertEqual(status["current_floor"], 2)
         self.assertEqual(status["door_open"], True)
@@ -103,24 +106,31 @@ class TestElevatorVisualizer(unittest.TestCase):
     # TestCase 2
     def test_update_elevator_status_invalid_id(self):
         from unittest.mock import patch
-        with patch('logging.warning') as mock_log:
-            self.visualizer.update_elevator_status(ElevatorId(99), Floor(2), False, Direction.IDLE)
+
+        with patch("logging.warning") as mock_log:
+            self.visualizer.update_elevator_status(99, Floor(2), False, Direction.IDLE)
             mock_log.assert_called_once()
 
     # TestCase 3
     def test_update_elevator_status_invalid_floor(self):
         from unittest.mock import patch
-        with patch('logging.warning') as mock_log:
-            self.visualizer.update_elevator_status(ElevatorId(1), Floor(99), False, Direction.IDLE)
+
+        with patch("logging.warning") as mock_log:
+            self.visualizer.update_elevator_status(1, Floor(99), False, Direction.IDLE)
             self.assertIn("not found in floor positions", mock_log.call_args[0][0])
 
     def test_paint_event_callable(self):
         from PySide6.QtGui import QPaintEvent
+
         event = QPaintEvent(self.visualizer.rect())
         try:
             self.visualizer.paintEvent(event)
         except Exception as e:
             self.fail(f"paintEvent raised exception: {e}")
 
+
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

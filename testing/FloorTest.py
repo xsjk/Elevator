@@ -1,18 +1,13 @@
 import unittest
-import sys
-import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from system.utils.common import Floor, Direction
+from common import Direction, Floor
 
-# Floor 类代码略（请用你自己的）
 
 class TestFloor(unittest.TestCase):
-
     def test_construction(self):
         # TestCase 1
         self.assertEqual(Floor(3), 3)
-        
+
         # TestCase 2
         self.assertEqual(Floor("-2"), -1)
 
@@ -28,12 +23,20 @@ class TestFloor(unittest.TestCase):
         self.assertEqual(repr(Floor(3)), "Floor(3)")
 
     def test_add_sub(self):
-        # TestCase of _add_
+        # TestCase of _add_ with int
         self.assertEqual(Floor(2) + 3, Floor(5))
 
-        # TestCase of _sub_
+        # TestCase of _sub_ with int
         self.assertEqual(Floor(2) - 3, Floor(-2))
-        
+
+        # TestCase of _sub_ with Floor
+        self.assertEqual(Floor(5) - Floor(3), 2)
+        self.assertEqual(Floor(5) - Floor(7), -2)
+        self.assertEqual(Floor(5) - Floor(-1), 5)
+
+        # TestCase of _sub_ with float
+        self.assertAlmostEqual(Floor(5) - 2.5, 2.5)
+        self.assertAlmostEqual(Floor(-1) + 2.5, 2.5)
 
     def test_direction_to(self):
         # TestCase 1
@@ -62,5 +65,9 @@ class TestFloor(unittest.TestCase):
         # TestCase 3
         self.assertFalse(Floor(3).is_of(Direction.IDLE, Floor(5)))
 
+
 if __name__ == "__main__":
-    unittest.main()
+    try:
+        unittest.main()
+    except KeyboardInterrupt:
+        pass

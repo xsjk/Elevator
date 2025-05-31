@@ -23,8 +23,6 @@ def setup() -> tuple[QEventLoop, QCoreApplication]:
         main_window.tm = tm
 
     event_loop = QEventLoop(app)
-    # asyncio.set_event_loop(event_loop)
-
     return event_loop, app
 
 
