@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from system.gui.gui_controller import GUIController
-from system.utils.common import Direction, ElevatorId
+from system.utils.common import Direction, ElevatorId, FloorLike
 
 
 class TestGUIController(unittest.IsolatedAsyncioTestCase):
@@ -26,8 +26,8 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(unsubscribe_mock.call_count, 4)
 
     def test_on_elevator_state_changed_updates_ui(self):
-        eid = ElevatorId(1)
-        floor = 3
+        eid: ElevatorId = 1
+        floor: FloorLike = 3
         door_state = MagicMock()
         door_state.is_open.return_value = True
         direction = Direction.UP
@@ -43,7 +43,7 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
         visualizer.update_elevator_status.assert_called_once()
 
     def test_on_call_completed(self):
-        floor = 2
+        floor: FloorLike = 2
         direction = Direction.DOWN
         building_panel = MagicMock()
         self.controller.window.building_panel = building_panel
@@ -52,8 +52,8 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
         building_panel.clear_call_button.assert_called_once_with(floor, direction)
 
     def test_on_floor_arrived(self):
-        eid = ElevatorId(1)
-        floor = 5
+        eid: ElevatorId = 1
+        floor: FloorLike = 5
         panel = MagicMock()
         self.controller.window.elevator_panels = {eid: panel}
 
@@ -77,7 +77,7 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             super_reset.assert_awaited()
 
     async def test_call_elevator_sets_button_and_calls_super(self):
-        floor = 1
+        floor: FloorLike = 1
         direction = Direction.UP
         button = MagicMock()
         self.controller.window.building_panel.up_buttons = {str(floor): button}
@@ -88,8 +88,8 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             super_call.assert_awaited()
 
     async def test_select_floor(self):
-        floor = 2
-        eid = ElevatorId(1)
+        floor: FloorLike = 2
+        eid: ElevatorId = 1
         button = MagicMock()
         self.controller.window.elevator_panels = {eid: MagicMock()}
         self.controller.window.elevator_panels[eid].floor_buttons = {str(floor): button}
@@ -100,8 +100,8 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             super_select.assert_awaited()
 
     async def test_deselect_floor(self):
-        floor = 2
-        eid = ElevatorId(1)
+        floor: FloorLike = 2
+        eid: ElevatorId = 1
         button = MagicMock()
         self.controller.window.elevator_panels = {eid: MagicMock()}
         self.controller.window.elevator_panels[eid].floor_buttons = {str(floor): button}

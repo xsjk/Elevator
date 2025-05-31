@@ -21,7 +21,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
             t.cancel()
         await self.tg.__aexit__(None, None, None)
 
-    async def test_acccerate_distance(self):
+    async def test_accelerate_distance(self):
         self.assertEqual(self.elevator.accelerate_distance, 0.5)
 
     async def test_max_speed(self):
@@ -113,17 +113,17 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.elevator._door_last_state_change_time = self.elevator.event_loop.time() - 1.0
 
         # TestCase 1
-        self.elevator._state = ElevatorState.OPENING_DOOR
+        self.elevator.state = ElevatorState.OPENING_DOOR
         close_time_1 = self.elevator.estimate_door_close_time()
         self.assertAlmostEqual(close_time_1, 8.0, delta=0.1)
 
         # TestCase 2
-        self.elevator._state = ElevatorState.STOPPED_DOOR_OPENED
+        self.elevator.state = ElevatorState.STOPPED_DOOR_OPENED
         close_time_2 = self.elevator.estimate_door_close_time()
         self.assertAlmostEqual(close_time_2, 5.0, delta=0.1)
 
         # TestCase 3
-        self.elevator._state = ElevatorState.CLOSING_DOOR
+        self.elevator.state = ElevatorState.CLOSING_DOOR
         close_time_2 = self.elevator.estimate_door_close_time()
         self.assertAlmostEqual(close_time_2, 2.0, delta=0.1)
 
@@ -131,17 +131,17 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.elevator._door_last_state_change_time = self.elevator.event_loop.time() - 1.0
 
         # TestCase 1
-        self.elevator._state = ElevatorState.OPENING_DOOR
+        self.elevator.state = ElevatorState.OPENING_DOOR
         open_time_1 = self.elevator.estimate_door_open_time()
         self.assertAlmostEqual(open_time_1, 5.0, delta=0.1)
 
         # TestCase 2
-        self.elevator._state = ElevatorState.STOPPED_DOOR_OPENED
+        self.elevator.state = ElevatorState.STOPPED_DOOR_OPENED
         open_time_2 = self.elevator.estimate_door_open_time()
         self.assertAlmostEqual(open_time_2, 2.0, delta=0.1)
 
         # TestCase 3
-        self.elevator._state = ElevatorState.CLOSING_DOOR
+        self.elevator.state = ElevatorState.CLOSING_DOOR
         close_time_2 = self.elevator.estimate_door_open_time()
         self.assertAlmostEqual(close_time_2, 4.0, delta=0.1)
 
@@ -154,7 +154,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         event = self.elevator.commit_floor(Floor("3"), Direction.IDLE)
         await asyncio.sleep(0.1)
         target = self.elevator.pop_target()
-        self.assertEqual(target, FloorAction(Floor("3"), Direction.IDLE))
+        self.assertEqual(target, FloorAction(3, Direction.IDLE))
         self.assertTrue(event.is_set())
 
     # TestCase 1 self.current_floor < target_floor
@@ -168,7 +168,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
     # TestCase 2
     async def test_move_loop_case2(self):
-        self.elevator.current_floor = 3
+        self.elevator.current_floor = Floor("3")
         event2 = self.elevator.commit_floor(Floor("1"), Direction.UP)
         await asyncio.sleep(2.0)
         self.assertEqual(self.elevator.state, ElevatorState.MOVING_DOWN)
@@ -180,7 +180,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
     # if empty(Case 3, 4, 5)
     # TestCase 3
     async def test_move_loop_case3(self):
-        self.elevator.current_floor = 1
+        self.elevator.current_floor = Floor("1")
         event3 = self.elevator.commit_floor(Floor("2"), Direction.IDLE)
 
         await event3.wait()
@@ -237,7 +237,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
     # TestCase 9: next_direction == -commited_direction
     async def test_move_loop_case9(self):
-        self.elevator.current_floor = 2
+        self.elevator.current_floor = Floor("2")
         event9 = self.elevator.commit_floor(Floor("2"), Direction.DOWN)
         event10 = self.elevator.commit_floor(Floor("2"), Direction.UP)
 
@@ -285,20 +285,20 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg, "door_closed#1")
 
     async def test_moving_direction(self):
-        self.elevator._state = ElevatorState.MOVING_DOWN
+        self.elevator.state = ElevatorState.MOVING_DOWN
         self.assertEqual(self.elevator.moving_direction, Direction.DOWN)
 
     async def test_door_open(self):
         # Test Case1
-        self.elevator._state = ElevatorState.STOPPED_DOOR_OPENED
+        self.elevator.state = ElevatorState.STOPPED_DOOR_OPENED
         self.assertTrue(self.elevator.door_open)
 
         # Test Case2
-        self.elevator._state = ElevatorState.STOPPED_DOOR_CLOSED
+        self.elevator.state = ElevatorState.STOPPED_DOOR_CLOSED
         self.assertFalse(self.elevator.door_open)
 
     async def test_state(self):
-        self.elevator._state = ElevatorState.MOVING_UP
+        self.elevator.state = ElevatorState.MOVING_UP
         self.assertEqual(self.elevator.state, ElevatorState.MOVING_UP)
 
     async def test_next_target_floor(self):
@@ -311,11 +311,11 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
     async def test_current_position(self):
         # TestCase 1
-        self.elevator._state = ElevatorState.MOVING_UP
+        self.elevator.state = ElevatorState.MOVING_UP
         self.assertAlmostEqual(self.elevator.current_position, 1.0, delta=0.1)
 
         # TestCase 2
-        self.elevator._state = ElevatorState.MOVING_DOWN
+        self.elevator.state = ElevatorState.MOVING_DOWN
         self.assertAlmostEqual(self.elevator.current_position, 1.0, delta=0.1)
 
     async def test_direction_to(self):
@@ -332,7 +332,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
     async def test_position_percentage(self):
         self.elevator._moving_timestamp = self.elevator.event_loop.time() - 1.5
         self.elevator._moving_speed = 1
-        self.elevator._state = ElevatorState.MOVING_UP
+        self.elevator.state = ElevatorState.MOVING_UP
         p = self.elevator.position_percentage
         self.assertAlmostEqual(p, 1.0, delta=0.2)
 
@@ -340,23 +340,23 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.elevator._door_last_state_change_time = self.elevator.event_loop.time() - 1.0
 
         # TestCase 1
-        self.elevator._state = ElevatorState.STOPPED_DOOR_OPENED
+        self.elevator.state = ElevatorState.STOPPED_DOOR_OPENED
         self.assertAlmostEqual(self.elevator.door_position_percentage, 1.0, delta=0.2)
 
         # TestCase 2
-        self.elevator._state = ElevatorState.OPENING_DOOR
+        self.elevator.state = ElevatorState.OPENING_DOOR
         self.assertAlmostEqual(self.elevator.door_position_percentage, 0.5, delta=0.2)
 
         # TestCase 3
-        self.elevator._state = ElevatorState.CLOSING_DOOR
+        self.elevator.state = ElevatorState.CLOSING_DOOR
         self.assertAlmostEqual(self.elevator.door_position_percentage, 0.5, delta=0.2)
 
         # TestCase 4
-        self.elevator._state = ElevatorState.STOPPED_DOOR_CLOSED
+        self.elevator.state = ElevatorState.STOPPED_DOOR_CLOSED
         self.assertAlmostEqual(self.elevator.door_position_percentage, 0.0, delta=0.2)
 
     async def test_door_state(self):
-        self.elevator._state = ElevatorState.CLOSING_DOOR
+        self.elevator.state = ElevatorState.CLOSING_DOOR
         state = self.elevator.door_state
         self.assertEqual(state.name, "CLOSING")
 
