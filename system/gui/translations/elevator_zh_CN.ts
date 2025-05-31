@@ -72,14 +72,6 @@
         <source>Down</source>
         <translation>向下</translation>
     </message>
-    <message>
-        <source>Open Door</source>
-        <translation>开门</translation>
-    </message>
-    <message>
-        <source>Close Door</source>
-        <translation>关门</translation>
-    </message>
 </context>
 <context>
     <name>MainWindow</name>

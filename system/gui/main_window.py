@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.controller import Config, Controller
-from ..utils.common import Direction, DoorState, Floor, FloorLike
+from ..utils.common import Direction, DoorState, Floor, FloorLike, ElevatorId
 from .i18n import TranslationManager
 from .visualizer import ElevatorVisualizer
 
@@ -95,10 +95,6 @@ class ElevatorConfigDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
-        # Register as observer for language changes
-        if tm is not None:
-            tm.add_observer(self)
-
     def get_config_values(self):
         """Return the configured values"""
         return {
@@ -116,12 +112,6 @@ class ElevatorConfigDialog(QDialog):
         self.door_duration_label.setText(QCoreApplication.translate("ConfigDialog", "Door Operation Duration:"))
         self.door_stay_label.setText(QCoreApplication.translate("ConfigDialog", "Door Stay Duration:"))
         self.info_label.setText(QCoreApplication.translate("ConfigDialog", "Note: Changing elevator count requires system restart."))
-
-    def closeEvent(self, event):
-        """Handle dialog close event"""
-        if tm is not None:
-            tm.remove_observer(self)
-        super().closeEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -286,6 +276,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(QCoreApplication.translate("MainWindow", "Elevator Control System"))
         self.reset_button.setText(QCoreApplication.translate("MainWindow", "Reset"))
         self.config_button.setText(QCoreApplication.translate("MainWindow", "Configure Elevators"))
+        self.visualizer_toggle.setText(QCoreApplication.translate("MainWindow", "Show Visualizer"))
 
     def open_elevator_config_dialog(self):
         """Open the elevator configuration dialog"""
@@ -343,7 +334,8 @@ class BuildingPanel(QFrame):
 
             # Add up button (except for top floor)
             if floor_str != self.floors_config[0]:  # Top floor
-                up_button = QPushButton("↑")
+                up_button = QPushButton("▲")
+                up_button.setFont(QFont("Yu Gothic", 15, QFont.Weight.Bold))
                 up_button.setFixedSize(40, 40)
                 up_button.setCheckable(True)  # Make button checkable
                 up_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'cancel_'}call_up@{f_str}"))
@@ -356,7 +348,8 @@ class BuildingPanel(QFrame):
 
             # Add down button (except for bottom floor)
             if floor_str != self.floors_config[-1]:  # Bottom floor
-                down_button = QPushButton("↓")
+                down_button = QPushButton("▼")
+                down_button.setFont(QFont("Yu Gothic", 15, QFont.Weight.Bold))
                 down_button.setFixedSize(40, 40)
                 down_button.setCheckable(True)  # Make button checkable
                 down_button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'cancel_'}call_down@{f_str}"))
@@ -408,12 +401,12 @@ class ElevatorPanel(QFrame):
     Contains floor selection buttons and door control
     """
 
-    def __init__(self, elevator_id, elevator_controller: Controller):
+    def __init__(self, elevator_id: ElevatorId, elevator_controller: Controller):
         super().__init__()
         self.elevator_id = elevator_id
         self.elevator_controller = elevator_controller
         self.setFrameShape(QFrame.Shape.Box)
-        self.setMinimumWidth(120)
+        self.setMinimumWidth(140)
 
         layout = QVBoxLayout(self)
 
@@ -424,7 +417,7 @@ class ElevatorPanel(QFrame):
 
         self.status_frame = QFrame()
         self.status_frame.setFrameShape(QFrame.Shape.Panel)
-        self.status_frame.setMinimumHeight(60)
+        self.status_frame.setMinimumHeight(80)  # Ensure enough space for labels
         status_layout = QVBoxLayout(self.status_frame)
 
         self.floor_label = QLabel(f"{QCoreApplication.translate('ElevatorPanel', 'Current Floor:')} 1")
@@ -442,11 +435,12 @@ class ElevatorPanel(QFrame):
         self.floor_buttons: dict[str, QPushButton] = {}
 
         # Ensure floor_positions keys are strings
-        floor_positions = {"3": (0, 0), "2": (0, 1), "1": (1, 0), "-1": (1, 1)}
+        floor_positions = {"3": (0, 1), "2": (0, 0), "1": (1, 1), "-1": (1, 0)}
 
         for floor_str, pos in floor_positions.items():
             button = QPushButton(floor_str)
             button.setFixedSize(50, 50)
+            button.setFont(QFont("Yu Gothic", 15, QFont.Weight.Bold))
             button.setCheckable(True)
             button.clicked.connect(lambda checked, f_str=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'de'}select_floor@{f_str}#{self.elevator_id}"))
             button_layout.addWidget(button, pos[0], pos[1])
@@ -456,11 +450,15 @@ class ElevatorPanel(QFrame):
         door_frame = QWidget()
         door_layout = QHBoxLayout(door_frame)
 
-        self.open_door_button = QPushButton(QCoreApplication.translate("ElevatorPanel", "Open Door"))
+        self.open_door_button = QPushButton("◀|▶")
+        self.open_door_button.setFont(QFont("Yu Gothic", 10, QFont.Weight.Bold))
+        self.open_door_button.setFixedSize(50, 50)
         self.open_door_button.clicked.connect(lambda: self.elevator_controller.handle_message_task(f"open_door#{self.elevator_id}"))
         door_layout.addWidget(self.open_door_button)
 
-        self.close_door_button = QPushButton(QCoreApplication.translate("ElevatorPanel", "Close Door"))
+        self.close_door_button = QPushButton("▶|◀")
+        self.close_door_button.setFont(QFont("Yu Gothic", 10, QFont.Weight.Bold))
+        self.close_door_button.setFixedSize(50, 50)
         self.close_door_button.clicked.connect(lambda: self.elevator_controller.handle_message_task(f"close_door#{self.elevator_id}"))
         door_layout.addWidget(self.close_door_button)
         layout.addWidget(door_frame)
@@ -500,8 +498,6 @@ class ElevatorPanel(QFrame):
         self.floor_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Current Floor:')} 1")
         self.door_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Door:')} {QCoreApplication.translate('ElevatorPanel', 'Closed')}")
         self.direction_label.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Direction:')} {QCoreApplication.translate('ElevatorPanel', 'Idle')}")
-        self.open_door_button.setText(QCoreApplication.translate("ElevatorPanel", "Open Door"))
-        self.close_door_button.setText(QCoreApplication.translate("ElevatorPanel", "Close Door"))
 
 
 class ConsoleWidget(QFrame):
