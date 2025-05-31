@@ -18,8 +18,9 @@ class GUIController(Controller):
     Handles logging of commands to the console
     """
 
-    def __init__(self):
-        super().__init__(Config())
+    def __init__(self, config: Config = Config(), headless: bool = False):
+        super().__init__(config)
+        self.headless = headless
 
     def _setup_event_handlers(self):
         """Set up event handlers for elevator state changes"""
@@ -61,14 +62,20 @@ class GUIController(Controller):
                 await asyncio.sleep(0.02)
 
                 for eid, elevator in self.elevators.items():
-                    assert eid in v.elevator_status, f"Elevator {eid} not found in visualizer status"
-                    v.elevator_status[eid]["current_position"] = v.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
-                    v.elevator_status[eid]["door_percentage"] = elevator.door_position_percentage
+                    self._update_elevator_status(v, eid, elevator)
 
                 v.update()
         except asyncio.CancelledError:
             logger.debug("Position update loop cancelled")
             pass
+
+    def _update_elevator_status(self, visualizer, elevator_id, elevator):
+        """Helper method to update elevator status in the visualizer."""
+        if elevator_id in visualizer.elevator_status:
+            visualizer.elevator_status[elevator_id]["current_position"] = visualizer.FLOOR_HEIGHT * (len(self.config.floors) - elevator.current_position - 1)
+            visualizer.elevator_status[elevator_id]["door_percentage"] = elevator.door_position_percentage
+        else:
+            logger.warning(f"Elevator {elevator_id} not found in visualizer status")
 
     async def handle_message(self, message: str):
         """
@@ -83,9 +90,13 @@ class GUIController(Controller):
         # Call parent class handler
         await super().handle_message(message)
 
-    def start(self, tg: asyncio.TaskGroup | None = None):
+    def start(self, tg: asyncio.TaskGroup | asyncio.AbstractEventLoop | None = None):
         if not hasattr(self, "window"):
             self.window = MainWindow(self)
+
+        if self.headless:
+            self.window.hide()
+        else:
             self.window.show()
 
         # Subscribe to elevator events

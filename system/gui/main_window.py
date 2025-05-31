@@ -191,14 +191,14 @@ class MainWindow(QMainWindow):
 
         # Add elevator control panels - dynamically create based on controller config
         elevator_panels_widget = QWidget()
-        elevator_panels_layout = QHBoxLayout(elevator_panels_widget)
+        self.elevator_panels_layout = QHBoxLayout(elevator_panels_widget)
 
         # Create elevator panels dynamically based on elevator_count from config
-        self.elevator_panels = {}
+        self.elevator_panels: dict[int, ElevatorPanel] = {}
         for elevator_id in range(1, self.elevator_controller.config.elevator_count + 1):
             panel = ElevatorPanel(elevator_id, self.elevator_controller)
             self.elevator_panels[elevator_id] = panel
-            elevator_panels_layout.addWidget(panel)
+            self.elevator_panels_layout.addWidget(panel)
 
         self.elevators_layout.addWidget(elevator_panels_widget)
 
@@ -259,9 +259,7 @@ class MainWindow(QMainWindow):
     def set_elevator_count(self, count: int):
         """Set the number of elevators in the gui"""
 
-        # Create or remove elevator panels based on the new count
-        elevator_panels_widget = self.elevator_panels[1].parent()  # Get the parent widget
-        elevator_panels_layout = elevator_panels_widget.layout()
+        elevator_panels_layout = self.elevator_panels_layout.layout()
         if count < self.elevator_controller.config.elevator_count:
             # Remove excess panels
             for eid in range(count + 1, self.elevator_controller.config.elevator_count + 1):

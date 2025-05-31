@@ -75,7 +75,7 @@ class Controller:
             for i in range(count + 1, len(self.elevators) + 1):
                 e = self.elevators.pop(i)
                 if e.started:
-                    asyncio.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
+                    self.event_loop.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
 
         # add new elevators if count is more than current
         elif count > len(self.elevators):
@@ -113,7 +113,14 @@ class Controller:
 
         logger.info("Controller: Elevator system has been reset")
 
-    def start(self, tg: asyncio.TaskGroup | None = None):
+    def start(self, tg: asyncio.TaskGroup | asyncio.AbstractEventLoop | None = None):
+        if isinstance(tg, asyncio.AbstractEventLoop):
+            self.event_loop = tg
+        elif isinstance(tg, asyncio.TaskGroup) and tg._loop is not None:
+            self.event_loop = tg._loop
+        else:
+            self.event_loop = asyncio.get_event_loop()
+
         if self._started:
             logger.warning("Controller: Already started, ignoring start request")
             return
@@ -128,14 +135,13 @@ class Controller:
             logger.warning("Controller: Not started, ignoring stop request")
             return
 
-        for e in self.elevators.values():
-            await e.stop()
-
         current_task = asyncio.current_task()
-        for t in list(self.message_tasks.values()):
-            if t is not current_task:
-                t.cancel()
-                await t
+        tasks = [t for t in self.message_tasks.values() if t is not current_task]
+
+        for t in tasks:
+            t.cancel()
+
+        await asyncio.gather(*tasks + [e.stop() for e in self.elevators.values()])
 
         assert len(self.requests) == 0
         for e in self.elevators.values():
@@ -159,7 +165,7 @@ class Controller:
             finally:
                 self.message_tasks.pop(message)
 
-        self.message_tasks[message] = asyncio.create_task(wrapper(), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}")
+        self.message_tasks[message] = self.event_loop.create_task(wrapper(), name=f"HandleMessage-{message} {__file__}:{inspect.stack()[0].lineno}")
         return self.message_tasks[message]
 
     async def handle_message(self, message: str):
