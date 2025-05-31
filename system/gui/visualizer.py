@@ -18,7 +18,6 @@ class ElevatorVisualizer(QFrame):
     # Floor heights in pixels
     FLOOR_HEIGHT = 80
     # Building dimensions
-    BUILDING_WIDTH = 300  # Elevator dimensions
     ELEVATOR_WIDTH = 60
     ELEVATOR_HEIGHT = 70
     # Horizontal spacing between elevators
@@ -51,12 +50,15 @@ class ElevatorVisualizer(QFrame):
         self.floors = floors
         self.floors.sort()
 
-        # Ensure floors are in the correct order from bottom to top
         self.floor_positions = self._calculate_floor_positions()
 
         # Elevator configuration - create elevators dynamically based on elevator_count
         self.elevator_status = OrderedDict()
         self.set_elevator_count(elevator_count)
+
+        # Cache for drawing calculations
+        self._cached_dimensions = None
+        self._last_widget_size = (0, 0)
 
         # Subscribe to position updates
         # event_bus.subscribe(Event.ELEVATOR_UPDATED, self._on_elevator_position_updated)
@@ -153,6 +155,39 @@ class ElevatorVisualizer(QFrame):
         # Request repaint
         self.update()
 
+    def _update_drawing_cache(self, widget_width, widget_height):
+        """Update cached drawing calculations when widget size or elevator count changes"""
+        current_size = (widget_width, widget_height)
+        if self._cached_dimensions is None or self._last_widget_size != current_size:
+            building_width = self.BUILDING_WIDTH
+            building_height = self.BUILDING_HEIGHT
+
+            # Calculate building position (centered)
+            building_x = (widget_width - building_width) / 2
+            building_y = (widget_height - building_height + self.FLOOR_HEIGHT - self.ELEVATOR_HEIGHT) / 2
+
+            # Calculate elevator positioning
+            total_elevator_width = len(self.elevator_status) * self.ELEVATOR_WIDTH + (len(self.elevator_status) - 1) * self.ELEVATOR_SPACING
+            elevator_start_x = building_x + (building_width - total_elevator_width) / 2
+
+            # Calculate floor y positions
+            floor_y_positions = {}
+            total_height = len(self.floors) * self.FLOOR_HEIGHT
+            for i, floor in enumerate(self.floors):
+                floor_y_positions[floor] = building_y + total_height - (i + 1) * self.FLOOR_HEIGHT
+
+            self._cached_dimensions = {
+                "building_x": building_x,
+                "building_y": building_y,
+                "building_width": building_width,
+                "building_height": building_height,
+                "elevator_start_x": elevator_start_x,
+                "total_elevator_width": total_elevator_width,
+                "floor_y_positions": floor_y_positions,
+                "total_height": total_height,
+            }
+            self._last_widget_size = current_size
+
     def paintEvent(self, event):
         """Draw the building and elevators"""
         super().paintEvent(event)
@@ -160,120 +195,122 @@ class ElevatorVisualizer(QFrame):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Get widget dimensions
+        # Get widget dimensions and update cache
         width = self.width()
         height = self.height()
+        self._update_drawing_cache(width, height)
 
-        # Draw building
+        # Draw building and elevators using cached values
         self._draw_building(painter, width, height)
-
-        # Draw elevators
         self._draw_elevators(painter, width, height)
+
+    @property
+    def cached_dimensions(self) -> dict:
+        assert self._cached_dimensions is not None
+        return self._cached_dimensions
+
+    @property
+    def BUILDING_WIDTH(self):
+        elevator_count = len(self.elevator_status)
+        return elevator_count * self.ELEVATOR_WIDTH + (elevator_count + 1) * self.ELEVATOR_SPACING
+
+    @property
+    def BUILDING_HEIGHT(self):
+        return len(self.floors) * self.FLOOR_HEIGHT
 
     def _draw_building(self, painter: QPainter, width, height):
         """Draw the building structure"""
-        # Building outline
-        building_x = (width - self.BUILDING_WIDTH) / 2
+        cache = self.cached_dimensions
+
+        # Draw floor labels and shaft lines
+        painter.setPen(self.text_color)
+        painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
 
         # Draw floors
-        for floor, y_pos in self.floor_positions.items():
-            # Draw floor line with theme-aware color
-            painter.setPen(QPen(self.floor_line_color, 2))
-            painter.drawLine(int(building_x), int(y_pos + self.FLOOR_HEIGHT), int(building_x + self.BUILDING_WIDTH), int(y_pos + self.FLOOR_HEIGHT))  # Draw floor label with theme-aware color
-            painter.setPen(self.window_text_color)
-            painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            painter.drawText(int(building_x - 40), int(y_pos + self.FLOOR_HEIGHT - 10), f"Floor {floor}")
+        for i, floor in enumerate(self.floors):
+            y_pos = cache["floor_y_positions"][floor]
+
+            # Draw floor label
+            painter.drawText(int(cache["building_x"]), int(y_pos + self.FLOOR_HEIGHT / 2), f"{floor}F")
+
+        # Draw vertical elevator shafts
+        painter.setPen(QPen(self.light_color, 1, Qt.PenStyle.DashLine))
+        for i, floor in enumerate(self.floors):
+            y_pos = cache["floor_y_positions"][floor]
+
+            # Draw elevator shafts for this floor
+            shaft_top = y_pos
+            shaft_bottom = y_pos + self.ELEVATOR_HEIGHT
+            for elevator_id in self.elevator_status:
+                x = cache["elevator_start_x"] + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
+                painter.drawLine(int(x), int(shaft_top), int(x), int(shaft_bottom))
+                painter.drawLine(int(x + self.ELEVATOR_WIDTH), int(shaft_top), int(x + self.ELEVATOR_WIDTH), int(shaft_bottom))
+
+        # Draw horizontal floor lines
+        painter.setPen(QPen(self.light_color, 1, Qt.PenStyle.SolidLine))
+        for i in range(len(self.floors) + 1):
+            y_pos = cache["building_y"] + cache["total_height"] - (i + 1) * self.FLOOR_HEIGHT
+            painter.drawLine(0, int(y_pos + self.ELEVATOR_HEIGHT), width, int(y_pos + self.ELEVATOR_HEIGHT))
+            painter.drawLine(0, int(y_pos + self.FLOOR_HEIGHT), width, int(y_pos + self.FLOOR_HEIGHT))
 
     def _draw_elevators(self, painter, width, height):
-        """
-        Draw all elevators with dynamic positioning based on elevator count
-        Supports any number of elevators configured in the system
-        """
-        building_x = (width - self.BUILDING_WIDTH) / 2
-
-        # Calculate starting position for first elevator - centers all elevators in building
-        total_elevator_width = len(self.elevator_status) * self.ELEVATOR_WIDTH + (len(self.elevator_status) - 1) * self.ELEVATOR_SPACING
-        elevator_start_x = building_x + (self.BUILDING_WIDTH - total_elevator_width) / 2
+        """Draw all elevators with dynamic positioning based on elevator count"""
+        cache = self.cached_dimensions
 
         # Draw each elevator
         for elevator_id, elevator in self.elevator_status.items():
-            # Calculate elevator position
-            x = elevator_start_x + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
-            y = elevator["current_position"]
+            # Calculate elevator position using cached values
+            x = cache["elevator_start_x"] + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
+            y = cache["building_y"] + elevator["current_position"]
 
-            # Set elevator color based on direction
-            if elevator["direction"] == "up":
-                color = self.up_color  # Green for up
-            elif elevator["direction"] == "down":
-                color = self.down_color  # Red for down
-            else:
-                color = self.idle_color  # Gray for idle
+            self._draw_single_elevator(painter, elevator_id, elevator, x, y)
 
-            # Draw elevator shaft
-            painter.setPen(QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine))
-            shaft_x = x + self.ELEVATOR_WIDTH / 2
+    def _draw_single_elevator(self, painter, elevator_id, elevator, x, y):
+        """Draw a single elevator at the specified position"""
+        # Set elevator color based on direction
+        direction_colors = {"up": self.up_color, "down": self.down_color}
+        color = direction_colors.get(elevator["direction"], self.idle_color)
 
-            # Get the highest and lowest floor positions
-            lowest_floor = self.floors[0]  # First floor in the list (now -1)
-            highest_floor = self.floors[-1]  # Last floor in the list (now 3)
+        # Draw elevator body
+        painter.setPen(QPen(self.light_color, 2))
+        painter.setBrush(QBrush(color))
 
-            shaft_top = self.floor_positions[highest_floor]
-            shaft_bottom = self.floor_positions[lowest_floor] + self.FLOOR_HEIGHT
+        elevator_rect = QRectF(x, y, self.ELEVATOR_WIDTH, self.ELEVATOR_HEIGHT)
+        painter.drawRect(elevator_rect)
 
-            painter.drawLine(int(shaft_x), int(shaft_top), int(shaft_x), int(shaft_bottom))
+        # Draw elevator ID
+        painter.setPen(self.text_color)
+        painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        painter.drawText(elevator_rect, Qt.AlignmentFlag.AlignCenter, f"E{elevator_id}")
 
-            # Draw elevator
-            painter.setPen(QPen(Qt.GlobalColor.black, 2))
-            painter.setBrush(QBrush(color))
+        # Draw doors if needed
+        door_percentage = elevator.get("door_percentage", 0.0)
+        if elevator["door_open"] or door_percentage > 0:
+            self._draw_elevator_doors(painter, x, y, door_percentage)
 
-            elevator_rect = QRectF(x, y, self.ELEVATOR_WIDTH, self.ELEVATOR_HEIGHT)
-            painter.drawRect(elevator_rect)
+    def _draw_elevator_doors(self, painter, x, y, door_percentage):
+        """Draw elevator doors with specified opening percentage"""
+        assert 0.0 <= door_percentage <= 1.0, f"Invalid door percentage: {door_percentage}"
 
-            # Draw elevator ID
-            painter.setPen(self.text_color)
-            painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            painter.drawText(elevator_rect, Qt.AlignmentFlag.AlignCenter, f"E{elevator_id}")
+        door_width = self.ELEVATOR_WIDTH / 2 - 4
+        door_height = self.ELEVATOR_HEIGHT - 8
 
-            # Draw doors if open or partially open
-            door_percentage = elevator.get("door_percentage", 0.0)
-            if elevator["door_open"] or door_percentage > 0:
-                door_width = self.ELEVATOR_WIDTH / 2 - 4
-                door_height = self.ELEVATOR_HEIGHT - 8
+        # Calculate door offsets
+        left_door_offset = (door_width / 2) * door_percentage
+        right_door_offset = (door_width / 2) * door_percentage
 
-                # Calculate door offset based on door percentage
-                left_door_offset = (door_width / 2) * door_percentage
-                right_door_offset = (door_width / 2) * door_percentage
+        painter.setPen(QPen(self.light_color, 1))
+        painter.setBrush(QBrush(self.door_color))
 
-                # Left door
-                painter.setPen(QPen(Qt.GlobalColor.black, 1))
-                painter.setBrush(QBrush(self.door_color))
-                painter.drawRect(QRectF(x + 4 - left_door_offset, y + 4, door_width, door_height))
+        # Left door
+        painter.drawRect(QRectF(x + 4 - left_door_offset, y + 4, door_width, door_height))
 
-                # Right door
-                painter.drawRect(QRectF(x + self.ELEVATOR_WIDTH / 2 + right_door_offset, y + 4, door_width, door_height))
+        # Right door
+        painter.drawRect(QRectF(x + self.ELEVATOR_WIDTH / 2 + right_door_offset, y + 4, door_width, door_height))
 
-                # Draw open space (visible when doors are fully or partially open)
-                if door_percentage > 0:
-                    open_width = self.ELEVATOR_WIDTH - 8 - (door_width - left_door_offset) - (door_width - right_door_offset)
-                    if open_width > 0:
-                        painter.setBrush(QBrush(self.door_open_color))
-                        painter.drawRect(QRectF(x + 4 + door_width - left_door_offset, y + 4, open_width, door_height))
-
-    def _draw_elevators_text(self, painter, width, height):
-        """Draw the elevators"""
-        building_x = (width - self.BUILDING_WIDTH) / 2
-
-        # Calculate starting position for first elevator
-        elevator_start_x = building_x + (self.BUILDING_WIDTH - (len(self.elevator_status) * self.ELEVATOR_WIDTH + (len(self.elevator_status) - 1) * self.ELEVATOR_SPACING)) / 2
-
-        # Draw each elevator
-        for elevator_id, elevator in self.elevator_status.items():
-            # Calculate elevator position
-            x = elevator_start_x + (elevator_id - 1) * (self.ELEVATOR_WIDTH + self.ELEVATOR_SPACING)
-            y = elevator["current_position"]
-
-            # Draw current floor
-            text_rect = QRectF(x, y + self.ELEVATOR_HEIGHT, self.ELEVATOR_WIDTH, 20)
-            painter.setPen(self.text_color)
-            painter.setFont(QFont("Arial", 8))
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, f"Floor: {elevator['current_floor']}")
+        # Draw open space if doors are open
+        if door_percentage > 0:
+            open_width = self.ELEVATOR_WIDTH - 8 - (door_width - left_door_offset) - (door_width - right_door_offset)
+            if open_width > 0:
+                painter.setBrush(QBrush(self.door_open_color))
+                painter.drawRect(QRectF(x + 4 + door_width - left_door_offset, y + 4, open_width, door_height))
