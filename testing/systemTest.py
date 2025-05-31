@@ -55,6 +55,22 @@ class SystemTestOpenDoor(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.elevator2.state.is_door_open())
         self.assertIn("Closed", self.elevator1_UI.door_label.text())
         self.assertIn("Closed", self.elevator2_UI.door_label.text())
+    
+    async def test_open_door_after_close_button(self):
+        # 用户点击 open door
+        self.elevator1_UI.open_door_button.click()
+        await asyncio.sleep(0.5)  # 给电梯状态机反应时间
+
+        # 检查门是否已打开
+        self.assertTrue(self.elevator1._state.is_door_open())
+        self.assertIn("Open", self.elevator1_UI.door_label.text())
+
+        await asyncio.sleep(4)
+        self.assertEqual(self.elevator1.state, ElevatorState.CLOSING_DOOR)
+
+        self.elevator1_UI.open_door_button.click()
+        await asyncio.sleep(0.1)
+        self.assertEqual(self.elevator1.state, ElevatorState.OPENING_DOOR)
 
     async def test_open_door_on_arrival_and_autoclose(self):
         """UC1-b: Elevator arrives at target floor -> door opens automatically"""
@@ -65,13 +81,16 @@ class SystemTestOpenDoor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.elevator1.current_floor, Floor("2"))
 
         # 检查门是否自动打开
-        self.assertTrue(self.elevator1._state.is_door_open())
+        self.assertEqual(self.elevator1._state, ElevatorState.OPENING_DOOR)
         self.assertIn("Open", self.elevator1_UI.door_label.text())
 
-        await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration + 3)
+        await asyncio.sleep(4)
         # 门应自动关闭
-        self.assertFalse(self.elevator1._state.is_door_open())
-        self.assertIn("Closed", self.elevator1_UI.door_label.text())
+        self.assertEqual(self.elevator1._state, ElevatorState.CLOSING_DOOR)
+
+        self.building.down_buttons["2"].click()
+        await asyncio.sleep(1)
+        self.assertEqual(self.elevator1._state, ElevatorState.OPENING_DOOR)
 
     async def test_close_door_by_button(self):
         """UC2-a: Manually press close door when open -> door starts closing"""
