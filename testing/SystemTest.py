@@ -8,7 +8,7 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
 
-        self.elevator2.current_floor = Floor("3")
+        self.elevator2.current_floor = 3
         self.elevator2_UI.update_elevator_status(self.elevator2.current_floor, self.elevator2.state.get_door_state(), self.elevator2.state.get_moving_direction())
 
     async def test_open_door_by_button_and_autoclose(self):

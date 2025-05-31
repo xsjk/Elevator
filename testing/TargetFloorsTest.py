@@ -1,8 +1,6 @@
 import unittest
-import sys
-import os
 
-from common import FloorAction, Direction, TargetFloorChains
+from common import FloorAction, Direction, TargetFloors
 
 
 class TestTargetFloors(unittest.IsolatedAsyncioTestCase):
