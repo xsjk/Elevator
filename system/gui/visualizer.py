@@ -159,7 +159,7 @@ class ElevatorVisualizer(QFrame):
     def _update_drawing_cache(self, widget_width, widget_height):
         """Update cached drawing calculations when widget size or elevator count changes"""
         current_size = (widget_width, widget_height)
-        if self._cached_dimensions is None or self._last_widget_size != current_size:
+        if self._cached_dimensions is None or self._last_widget_size != current_size or len(self.elevator_status) != self._last_elevator_count:
             building_width = self.BUILDING_WIDTH
             building_height = self.BUILDING_HEIGHT
 
@@ -188,6 +188,7 @@ class ElevatorVisualizer(QFrame):
                 "total_height": total_height,
             }
             self._last_widget_size = current_size
+            self._last_elevator_count = len(self.elevator_status)
 
     def paintEvent(self, event):
         """Draw the building and elevators"""

@@ -227,7 +227,8 @@ class Controller:
 
         if elevator.state.is_moving():
             duration = elevator.door_move_duration + elevator.door_stay_duration
-        elif target_floor == elevator.current_floor and elevator.committed_direction == requested_direction:
+        elif target_floor == elevator.current_floor and elevator.committed_direction in (requested_direction, Direction.IDLE):
+            logger.setLevel(old_level)
             return elevator.estimate_door_open_time()
         else:
             duration = elevator.estimate_door_close_time() + elevator.door_move_duration + elevator.door_stay_duration

@@ -108,7 +108,7 @@ class Floor(int):
             raise TypeError(f"Unsupported operand type(s) for +: 'Floor' and '{type(other).__name__}'")
 
     @overload
-    def __sub__(self, other: Self) -> int: ...
+    def __sub__(self, other: Self) -> int: ...  # type: ignore
 
     @overload
     def __sub__(self, other: int) -> Self: ...

@@ -2,8 +2,6 @@ import asyncio
 import inspect
 import logging
 
-from PySide6.QtCore import QCoreApplication
-
 from ..core.controller import Config, Controller, Floor
 from ..utils.common import Direction, DoorState, ElevatorId, Event, FloorLike
 from ..utils.event_bus import event_bus
@@ -87,8 +85,7 @@ class GUIController(Controller):
         Then delegate to the parent class for actual processing
         """
         # Using QCoreApplication.translate for translation
-        translated_text = QCoreApplication.translate("Console", "Processing command:")
-        self.window.console_widget.log_message(f"{translated_text} {message}")
+        self.window.console_widget.log_message(f"🡒 {message}")
         logging.info(f"Processing command: {message}")
 
         # Call parent class handler
@@ -154,3 +151,8 @@ class GUIController(Controller):
 
         self.window.set_elevator_count(count)
         super().set_elevator_count(count)
+
+    async def get_event_message(self) -> str:
+        msg = await super().get_event_message()
+        self.window.console_widget.log_message(f"🡐 {msg}")
+        return msg

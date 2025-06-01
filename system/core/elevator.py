@@ -331,6 +331,7 @@ class Elevator:
         c.target_floor_chains = copy(self.target_floor_chains)
         c.events = {k: asyncio.Event() for k in self.events}
         c.door_action_queue = asyncio.Queue()
+        c.queue = asyncio.Queue()
         return c
 
     async def commit_door(self, door_state: DoorDirection):
@@ -369,7 +370,7 @@ class Elevator:
 
         # arrive immediately if the elevator is already at the floor
         if target_direction == Direction.IDLE:  # same floor
-            if requested_direction == self.target_floor_chains.direction:  # same direction
+            if self.target_floor_chains.direction in (requested_direction, Direction.IDLE):  # same direction
                 msg = f"floor_arrived@{self.current_floor}#{self.id}"
                 match requested_direction:
                     case Direction.UP:
@@ -486,9 +487,9 @@ class Elevator:
         Returns:
             float: Estimated time in seconds until the door is fully closed.
         """
-        duration: float = self.door_move_duration + self.door_stay_duration + self.door_move_duration
+        duration: float = self.door_move_duration + self.door_stay_duration
         if self._door_last_state_change_time is None:
-            return duration
+            return self.door_move_duration + self.door_stay_duration
         passed = self.event_loop.time() - self._door_last_state_change_time
 
         match self.state:

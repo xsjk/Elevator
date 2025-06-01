@@ -1,0 +1,467 @@
+/* Common Theme for Elevator Control System: shared layout and component dimensions */
+
+/* ====== COMMON LAYOUT PROPERTIES ====== */
+/* These properties define dimensions, margins, paddings and other layout elements */
+
+/* General Layout */
+QMainWindow, QDialog {
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+}
+
+QFrame, QGroupBox {
+    border-radius: 8px;
+    padding: 6px;
+    margin: 4px;
+}
+
+/* Button Dimensions */
+QPushButton {
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-weight: 600;
+    border: none;
+}
+
+QPushButton.elevator-floor-button {
+    min-width: 60px;
+    min-height: 60px;
+    max-width: 60px;
+    max-height: 60px;
+    border-radius: 30px;
+    padding: 0;
+    margin: 3px;
+    font-size: 18px;
+    font-weight: bold;
+    border-width: 2px;
+    border-style: solid;
+}
+
+QPushButton.building-call-button {
+    min-width: 45px;
+    min-height: 45px;
+    max-width: 45px;
+    max-height: 45px;
+    border-radius: 22.5px;
+    padding: 0;
+    margin: 2px;
+    font-size: 14px;
+    font-weight: bold;
+    border-width: 2px;
+    border-style: solid;
+}
+
+QPushButton.door-control-button {
+    min-width: 80px;
+    min-height: 40px;
+    max-width: 80px;
+    max-height: 40px;
+    border-radius: 8px;
+    padding: 0;
+    margin: 4px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton.control-button {
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin: 5px 0;
+    min-height: 40px;
+    font-weight: bold;
+}
+
+/* System buttons common properties */
+QPushButton.system-button {
+    min-height: 32px;
+    border-radius: 6px;
+    padding: 4px 16px; 
+    margin: 4px 8px;   
+    font-weight: 500;
+    font-size: 13px;
+    text-align: left;
+}
+
+/* Form Controls Dimensions */
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    border-radius: 8px;
+    border-width: 2px;
+    border-style: solid;
+    font-size: 13px;
+}
+
+QLineEdit {
+    padding: 6px 10px;
+}
+
+QComboBox {
+    padding: 4px 8px;
+    min-width: 100px;
+    margin-right: 6px;
+}
+
+QSpinBox, QDoubleSpinBox {
+    padding: 4px 8px;
+    min-width: 80px;
+}
+
+/* Text Areas */
+QTextEdit {
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    border-width: 2px;
+    border-style: solid;
+}
+
+/* Checkboxes */
+QCheckBox {
+    font-size: 13px;
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border-width: 2px;
+    border-style: solid;
+}
+
+/* Panels and Containers */
+QScrollArea.elevator-scroll-area {
+    border: none;
+    border-radius: 8px;
+    margin: 4px 0;
+    min-height: 500px;
+    max-height: 600px;
+}
+
+QFrame.building-panel {
+    max-width: 200px;
+    border-radius: 8px;
+}
+
+QFrame.elevator-panel {
+    min-width: 180px;
+    max-width: 250px;
+    max-height: 470px;
+    border-radius: 8px;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    width: 14px;
+    border-radius: 7px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    border-radius: 7px;
+    min-height: 20px;
+    margin: 2px;
+}
+
+QScrollBar:horizontal {
+    height: 14px;
+    border-radius: 7px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    border-radius: 7px;
+    min-width: 20px;
+    margin: 2px;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar:horizontal {
+    height: 10px;
+    border-radius: 5px;
+    margin: 0px 20px 0px 20px;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar::handle:horizontal {
+    border-radius: 5px;
+    min-width: 30px;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar::add-line:horizontal {
+    subcontrol-position: right;
+    subcontrol-origin: margin;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar::sub-line:horizontal {
+    subcontrol-position: left;
+    subcontrol-origin: margin;
+}
+
+/* Tooltips */
+QToolTip {
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    opacity: 220;
+}
+
+/* Enhanced Text Areas */
+QTextEdit.console {
+    border-radius: 10px;
+    padding: 8px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Enhanced Checkboxes */
+QCheckBox {
+    font-size: 13px;
+    spacing: 8px;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+}
+
+/* Enhanced Group Boxes */
+QGroupBox {
+    font-weight: bold;
+    border-radius: 12px;
+    margin-top: 20px;
+    padding-top: 20px;
+    font-size: 14px;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 15px;
+    padding: 6px 10px 6px 10px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+/* Enhanced Splitters */
+QSplitter::handle:horizontal {
+    width: 8px;
+}
+
+QSplitter::handle:vertical {
+    height: 8px;
+}
+
+/* Enhanced Labels */
+QLabel.title {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+QLabel.subtitle {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 8px 0;
+    padding: 8px;
+    border-radius: 6px;
+}
+
+QLabel.status {
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin: 3px 0;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Config Dialog Components */
+QLabel.dialog-title {
+    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+QGroupBox.config-group {
+    font-size: 16px;
+    margin-top: 25px;
+    padding-top: 25px;
+    border-radius: 12px;
+}
+
+QGroupBox.config-group::title {
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QLabel.config-label {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px;
+}
+
+QLabel.info-warning {
+    border-radius: 8px;
+    padding: 15px;
+    font-style: italic;
+    margin: 15px 0;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* MainWindow Control Components */
+QCheckBox.control-checkbox {
+    font-weight: 500;
+    font-size: 14px;
+    padding: 15px;
+}
+
+QLabel.control-label {
+    font-weight: 600;
+    margin-top: 10px;
+}
+
+QComboBox.control-combobox {
+    border-radius: 6px;
+    padding: 6px;
+    min-width: 150px;
+}
+
+QLabel.control-title {
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px;
+    border-radius: 6px;
+    margin: 5px 0;
+}
+
+/* Building Panel Components */
+QLabel.logo {
+    font-size: 24px;
+    padding: 5px;
+}
+
+QLabel.building-title {
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+QLabel.building-floor-label {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+/* Elevator Panel Components */
+QLabel.elevator-title {
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+/* Console Widget Components */
+QLabel.console-title {
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+QFrame.console-widget {
+    min-width: 200px;
+    max-width: 400px;
+}
+
+QTextEdit.console-output {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+QLabel.console-input-label {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+QLineEdit.console-input {
+    border-radius: 6px;
+    padding: 8px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* Elevator Status Labels */
+QLabel.elevator-status-label {
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 2px 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QFrame.control-panel {
+    border-radius: 8px;
+    padding: 10px;
+}
+
+QFrame.digital-status-frame {
+    border-radius: 6px;
+    padding: 2px;
+    margin: 5px 0;
+}
+
+QLabel.digital-display {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-weight: bold;
+    border-radius: 4px;
+    margin: 2px;
+    padding: 2px;
+    min-width: 30px;
+    min-height: 30px;
+}
+
+QLabel.floor-display {
+    font-size: 22px;
+}
+
+QLabel.door-display {
+    font-size: 18px;
+}
+
+QLabel.direction-display {
+    font-size: 18px;
+}
+
+/* Elevator Scroll Area */
+QScrollArea.elevator-scroll-area {
+    border: none;
+    border-radius: 8px;
+    margin: 4px 0;
+    min-height: 510px; 
+    max-height: 600px;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar:horizontal {
+    height: 10px;
+    border-radius: 5px;
+    margin: 0px 20px 0px 20px;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar::handle:horizontal {
+    border-radius: 5px;
+    min-width: 30px;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar::add-line:horizontal {
+    subcontrol-position: right;
+    subcontrol-origin: margin;
+}
+
+QScrollArea.elevator-scroll-area QScrollBar::sub-line:horizontal {
+    subcontrol-position: left;
+    subcontrol-origin: margin;
+}
