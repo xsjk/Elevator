@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from .common import Direction, DoorDirection, Elevator, ElevatorState, FloorAction
+from common import Direction, DoorDirection, Elevator, ElevatorState, FloorAction
 
 
 class TestElevator(unittest.IsolatedAsyncioTestCase):

@@ -170,7 +170,7 @@ class TargetFloorChains:
             raise TypeError(f"Unsupported event loop type: {type(self.event_loop)}")
 
     async def get(self) -> FloorAction:
-        wait_tasks = []
+        wait_tasks: list[asyncio.Task] = []
         try:
             while self.is_empty():
                 for name, e in zip(
@@ -194,9 +194,8 @@ class TargetFloorChains:
                     wait_tasks,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
-
                 if self.exit_event.is_set():
-                    raise asyncio.CancelledError()
+                    raise asyncio.CancelledError
 
                 # If swap_event is set, reset it and continue the loop
                 if self.swap_event.is_set():
@@ -206,16 +205,16 @@ class TargetFloorChains:
             return self.top()
 
         finally:
+            error: asyncio.CancelledError | None = None
             for task in wait_tasks:
-                if not task.done():
-                    task.cancel("exit")
-                    try:
-                        await task
-                    except asyncio.CancelledError as e:
-                        if str(e) != "exit":
-                            raise e
-                    finally:
-                        assert task.cancelled() or task.done()
+                task.cancel("exit")
+                try:
+                    await task
+                except asyncio.CancelledError as e:
+                    if str(e) != "exit":
+                        error = e
+            if error is not None:
+                raise asyncio.CancelledError from error
 
     def remove(self, item: FloorAction):
         if item in self.current_chain:
@@ -391,7 +390,7 @@ class Elevator:
                         pass
                     e.set()
 
-                asyncio.create_task(open_door(), name=f"open_door_elevator_{self.id}_floor_{floor} {__file__}:{inspect.stack()[0].lineno}")
+                self.event_loop.create_task(open_door(), name=f"open_door_elevator_{self.id}_floor_{floor} {__file__}:{inspect.stack()[0].lineno}")
                 logger.debug(f"Elevator {self.id}: Arrived at floor {floor} immediately, opening door")
                 return e
 
@@ -665,8 +664,9 @@ class Elevator:
                 await close_door()
 
             except asyncio.CancelledError as e:
-                if len(e.args) == 0:  # no message provided
-                    raise e  # the task was cancelled because of the program exit
+                assert task is not None
+                if task.uncancel() > 0:  # the task was cancelled because of the program exit
+                    raise asyncio.CancelledError from e
                 match self.state:
                     case ElevatorState.OPENING_DOOR:
                         logger.debug(f"Elevator {self.id}: Door opening cancelled")
@@ -718,7 +718,7 @@ class Elevator:
                         if action == DoorDirection.OPEN:
                             task.cancel("request door open")
                             await task
-                            assert task.cancelled() or task.done()
+                            assert task.done()
                             duration = self.event_loop.time() - self._door_last_state_change_time
                             logger.info(f"Door closing is interrupted after {duration}")
 
@@ -731,7 +731,7 @@ class Elevator:
                             assert not self.door_idle_event.is_set()
                             task.cancel("request door close")  # cancel the stay duration if it is running
                             await task
-                            assert task.cancelled() or task.done()
+                            assert task.done()
                             task = asyncio.create_task(close_door(), name=f"close_door_{__file__}:{inspect.stack()[0].lineno}")
 
                 self.door_action_processed.set()
@@ -743,7 +743,7 @@ class Elevator:
             if task is not None and not task.done():
                 task.cancel("exit")
                 await task
-                assert task.cancelled() or task.done()
+                assert task.done()
             self.door_loop_started = False
 
     @property

@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-import logging
 from dataclasses import dataclass, field
 from typing import AsyncGenerator
 
@@ -10,8 +9,8 @@ from ..utils.common import (
     ElevatorId,
     Event,
     Floor,
-    FloorLike,
     FloorAction,
+    FloorLike,
 )
 from ..utils.event_bus import event_bus
 from .elevator import Elevator, logger
@@ -142,7 +141,7 @@ class Controller:
         for t in tasks:
             t.cancel()
 
-        await asyncio.gather(*tasks + [e.stop() for e in self.elevators.values()])
+        await asyncio.wait(tasks + [asyncio.create_task(e.stop()) for e in self.elevators.values()])
 
         assert len(self.requests) == 0
         for e in self.elevators.values():
@@ -158,10 +157,14 @@ class Controller:
         logger.debug(f"Controller: Existing tasks: {list(self.message_tasks)}")
 
         async def wrapper():
+            task = asyncio.current_task()
+            assert task is not None
             try:
                 await self.handle_message(message)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as e:
                 logger.debug(f"Controller: Message task for '{message}' cancelled")
+                if task.uncancel() > 0:
+                    raise asyncio.CancelledError from e
             except Exception as e:
                 logger.error(f"Controller: Error while handling message '{message}': {e}")
                 raise e
@@ -242,8 +245,9 @@ class Controller:
             self.requests.add(directed_target_floor)
             await elevator.commit_floor(call_floor, call_direction).wait()
             event_bus.publish(Event.CALL_COMPLETED, call_floor, call_direction)
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError as e:
+            if str(e) != "cancel":
+                raise asyncio.CancelledError from e
         finally:
             self.requests.remove(directed_target_floor)
             elevator.cancel_commit(call_floor, call_direction)
@@ -259,7 +263,7 @@ class Controller:
 
         # Cancel the task associated with the elevator call
         t = self.message_tasks[key]
-        t.cancel()
+        t.cancel("cancel")
         await t
         assert directed_target_floor not in self.requests
 
@@ -280,8 +284,9 @@ class Controller:
             elevator.selected_floors.add(floor)
             await elevator.commit_floor(floor, Direction.IDLE).wait()
             event_bus.publish(Event.FLOOR_ARRIVED, floor, elevator_id)
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError as e:
+            if str(e) != "deselect":
+                raise asyncio.CancelledError from e
         finally:
             elevator.selected_floors.remove(floor)
             elevator.cancel_commit(floor, Direction.IDLE)
@@ -298,7 +303,7 @@ class Controller:
 
         # Cancel the task associated with the floor selection and wait for it to finishs
         t = self.message_tasks[key]
-        t.cancel()
+        t.cancel("deselect")
         await t
         assert floor not in elevator.selected_floors
 
