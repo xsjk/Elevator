@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import (
@@ -11,6 +10,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -22,28 +22,26 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
-    QGroupBox,
 )
 
 from ..core.controller import Config, Controller
-from ..utils.common import Direction, DoorState, Floor, FloorLike, ElevatorId
+from ..utils.common import Direction, DoorState, ElevatorId, Floor, FloorLike
 from .i18n import TranslationManager
-from .visualizer import ElevatorVisualizer
 from .theme_manager import ThemeManager
+from .visualizer import ElevatorVisualizer
 
-tm: TranslationManager | None = None
+translation_manager: TranslationManager
+theme_manager: ThemeManager
 
-# Global theme_manager instance
-theme_manager = ThemeManager()
+tr = QCoreApplication.translate
 
 
-class ElevatorConfigDialog(QDialog):
+class ConfigDialog(QDialog):
     """Configuration dialog for elevator system settings"""
 
     def __init__(self, current_config: Config, parent=None):
         super().__init__(parent)
         self.current_config = current_config
-        self.setWindowTitle(QCoreApplication.translate("ConfigDialog", "Elevator System Configuration"))
         self.setModal(True)
         self.setProperty("class", "config-dialog")
 
@@ -51,14 +49,16 @@ class ElevatorConfigDialog(QDialog):
         layout.setSpacing(25)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        # Add enhanced title
-        title_label = QLabel("🏢 " + QCoreApplication.translate("ConfigDialog", "Elevator System Configuration"))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setProperty("class", "dialog-title")
-        layout.addWidget(title_label)  # Create enhanced grouped form layout
-        config_group = QGroupBox("⚙️ " + QCoreApplication.translate("ConfigDialog", "System Settings"))
-        config_group.setProperty("class", "config-group")
-        group_layout = QVBoxLayout(config_group)
+        # Add title label
+        self.title_label = QLabel()
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setProperty("class", "dialog-title")
+        layout.addWidget(self.title_label)
+
+        # Create grouped form layout
+        self.config_group = QGroupBox()
+        self.config_group.setProperty("class", "config-group")
+        group_layout = QVBoxLayout(self.config_group)
         group_layout.setSpacing(20)
 
         # Create form layout for configuration options
@@ -67,73 +67,96 @@ class ElevatorConfigDialog(QDialog):
         self.form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.form_layout.setHorizontalSpacing(25)
 
-        # Elevator count configuration with enhanced styling
+        # Elevator count configuration
         self.elevator_count_spinbox = QSpinBox()
         self.elevator_count_spinbox.setRange(1, 10)
         self.elevator_count_spinbox.setValue(current_config.elevator_count)
         self.elevator_count_spinbox.setMinimumWidth(120)
-        self.elevator_count_label = QLabel("🏗️ " + QCoreApplication.translate("ConfigDialog", "Number of Elevators:"))
+        self.elevator_count_label = QLabel()
         self.elevator_count_label.setProperty("class", "config-label")
         self.form_layout.addRow(self.elevator_count_label, self.elevator_count_spinbox)
 
-        # Floor travel duration with enhanced styling
+        # Floor travel duration
         self.floor_travel_spinbox = QDoubleSpinBox()
         self.floor_travel_spinbox.setRange(0.1, 10.0)
         self.floor_travel_spinbox.setSingleStep(0.1)
         self.floor_travel_spinbox.setDecimals(1)
         self.floor_travel_spinbox.setValue(current_config.floor_travel_duration)
-        self.floor_travel_spinbox.setSuffix(QCoreApplication.translate("ConfigDialog", "s"))
         self.floor_travel_spinbox.setMinimumWidth(120)
-        self.floor_travel_label = QLabel("⏱️ " + QCoreApplication.translate("ConfigDialog", "Floor Travel Duration:"))
+        self.floor_travel_label = QLabel()
         self.floor_travel_label.setProperty("class", "config-label")
         self.form_layout.addRow(self.floor_travel_label, self.floor_travel_spinbox)
 
-        # Door operation duration with enhanced styling
+        # Door operation duration
         self.door_duration_spinbox = QDoubleSpinBox()
         self.door_duration_spinbox.setRange(0.1, 10.0)
         self.door_duration_spinbox.setSingleStep(0.1)
         self.door_duration_spinbox.setDecimals(1)
         self.door_duration_spinbox.setValue(current_config.door_move_duration)
-        self.door_duration_spinbox.setSuffix(QCoreApplication.translate("ConfigDialog", "s"))
         self.door_duration_spinbox.setMinimumWidth(120)
-        self.door_duration_label = QLabel("🚪 " + QCoreApplication.translate("ConfigDialog", "Door Operation Duration:"))
+        self.door_duration_label = QLabel()
         self.door_duration_label.setProperty("class", "config-label")
         self.form_layout.addRow(self.door_duration_label, self.door_duration_spinbox)
 
-        # Door stay duration with enhanced styling
+        # Door stay duration
         self.door_stay_spinbox = QDoubleSpinBox()
         self.door_stay_spinbox.setRange(0.1, 20.0)
         self.door_stay_spinbox.setSingleStep(0.1)
         self.door_stay_spinbox.setDecimals(1)
         self.door_stay_spinbox.setValue(current_config.door_stay_duration)
-        self.door_stay_spinbox.setSuffix(QCoreApplication.translate("ConfigDialog", "s"))
         self.door_stay_spinbox.setMinimumWidth(120)
-        self.door_stay_label = QLabel("⏳ " + QCoreApplication.translate("ConfigDialog", "Door Stay Duration:"))
+        self.door_stay_label = QLabel()
         self.door_stay_label.setProperty("class", "config-label")
         self.form_layout.addRow(self.door_stay_label, self.door_stay_spinbox)
 
         group_layout.addLayout(self.form_layout)
-        layout.addWidget(config_group)
+        layout.addWidget(self.config_group)
 
-        # # Add enhanced info label
-        # self.info_label = QLabel(QCoreApplication.translate("ConfigDialog", "Note: Changing elevator count requires system restart."))
-        # self.info_label.setWordWrap(True)
-        # self.info_label.setProperty("class", "info-warning")
-        # layout.addWidget(self.info_label)
+        # Add info label
+        self.info_label = QLabel()
+        self.info_label.setWordWrap(True)
+        self.info_label.setProperty("class", "info-warning")
+        layout.addWidget(self.info_label)
 
-        # Enhanced button box
+        # Button box
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
 
-        ok_button = self.button_box.button(QDialogButtonBox.StandardButton.Ok)
-        cancel_button = self.button_box.button(QDialogButtonBox.StandardButton.Cancel)
-        if ok_button:
-            ok_button.setText(QCoreApplication.translate("ConfigDialog", "Ok"))
-        if cancel_button:
-            cancel_button.setText(QCoreApplication.translate("ConfigDialog", "Cancel"))
+        self.ok_button = self.button_box.button(QDialogButtonBox.StandardButton.Ok)
+        self.cancel_button = self.button_box.button(QDialogButtonBox.StandardButton.Cancel)
 
         layout.addWidget(self.button_box)
+
+        # Initialize translations
+        self.update_language()
+
+    def update_language(self):
+        """Update UI text when language changes"""
+        # Window title
+        self.setWindowTitle(tr("ConfigDialog", "Elevator System Configuration"))
+
+        # Labels
+        self.title_label.setText(f"🏢 {tr('ConfigDialog', 'Elevator System Configuration')}")
+        self.config_group.setTitle(f"⚙️ {tr('ConfigDialog', 'System Settings')}")
+        self.elevator_count_label.setText(f"🏗️ {tr('ConfigDialog', 'Number of Elevators:')}")
+        self.floor_travel_label.setText(f"⏱️ {tr('ConfigDialog', 'Floor Travel Duration:')}")
+        self.door_duration_label.setText(f"🚪 {tr('ConfigDialog', 'Door Operation Duration:')}")
+        self.door_stay_label.setText(f"⏳ {tr('ConfigDialog', 'Door Stay Duration:')}")
+
+        # Info label
+        self.info_label.setText(tr("ConfigDialog", "Note: Changing the timings takes effect at next floor if the elevator is in motion."))
+
+        # Buttons
+        if self.ok_button:
+            self.ok_button.setText(tr("ConfigDialog", "Ok"))
+        if self.cancel_button:
+            self.cancel_button.setText(tr("ConfigDialog", "Cancel"))
+
+        # Set suffix after translation
+        self.floor_travel_spinbox.setSuffix(f" {tr('ConfigDialog', 's')}")
+        self.door_duration_spinbox.setSuffix(f" {tr('ConfigDialog', 's')}")
+        self.door_stay_spinbox.setSuffix(f" {tr('ConfigDialog', 's')}")
 
     def get_config_values(self):
         """Return the configured values"""
@@ -154,12 +177,16 @@ class MainWindow(QMainWindow):
 
     def __init__(self, elevator_controller: Controller):
         super().__init__()
-        self.setWindowTitle(QCoreApplication.translate("MainWindow", "Elevator Control System"))
         self.setGeometry(100, 100, 1200, 800)
 
-        # Apply initial theme
-        self.apply_theme()
-        theme_manager.theme_changed.connect(self.apply_theme)
+        # Initialize translation and theme managers
+        global translation_manager, theme_manager
+        app = QCoreApplication.instance()
+        assert app is not None
+        translation_manager = TranslationManager(app)
+        theme_manager = ThemeManager(app)
+        theme_manager.theme_changed.connect(self.update_theme_colors)
+        translation_manager.add_observer(self)
 
         self.elevator_controller = elevator_controller
 
@@ -240,9 +267,12 @@ class MainWindow(QMainWindow):
         self.content_layout.addWidget(self.elevators_widget, 3)
         self.content_layout.addWidget(sidebar, 1)
 
-        # Register as observer for language changes
-        if tm is not None:
-            tm.add_observer(self)
+        # Update all UI texts
+        self.update_language()
+        translation_manager.set_language("中文")
+
+        # Update theme
+        self.update_theme_colors()
 
     def create_control_panel(self) -> QFrame:
         """Create the enhanced control panel with modern styling"""
@@ -256,68 +286,66 @@ class MainWindow(QMainWindow):
         control_layout.addSpacing(10)
 
         # Panel title
-        self.control_title = QLabel("⚙️ " + QCoreApplication.translate("MainWindow", "Control Panel"))
+        self.control_title = QLabel()
         self.control_title.setProperty("class", "control-title")
         self.control_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         control_layout.addWidget(self.control_title)
 
-        # Reset button with softer style
-        self.reset_button = QPushButton("🔄 " + QCoreApplication.translate("MainWindow", "Reset System"))
-        self.reset_button.setProperty("class", "system-button")  # Changed from control-button to system-button
+        # Reset button
+        self.reset_button = QPushButton()
+        self.reset_button.setProperty("class", "system-button")
         self.reset_button.clicked.connect(lambda: self.elevator_controller.handle_message_task("reset"))
-        self.reset_button.setToolTip(QCoreApplication.translate("MainWindow", "Reset all elevators to initial state"))
         control_layout.addWidget(self.reset_button)
 
-        # Configuration button with softer style
-        self.config_button = QPushButton("⚙️ " + QCoreApplication.translate("MainWindow", "Configure Elevators"))
-        self.config_button.setProperty("class", "system-button")  # Changed from control-button to system-button
+        # Configuration button
+        self.config_button = QPushButton()
+        self.config_button.setProperty("class", "system-button")
         self.config_button.clicked.connect(self.open_elevator_config_dialog)
-        self.config_button.setToolTip(QCoreApplication.translate("MainWindow", "Change elevator system settings"))
         control_layout.addWidget(self.config_button)
 
         # Visualizer toggle checkbox
-        self.visualizer_toggle = QCheckBox("📊 " + QCoreApplication.translate("MainWindow", "Show Visualizer"))
+        self.visualizer_toggle = QCheckBox()
         self.visualizer_toggle.setChecked(True)
         self.visualizer_toggle.setProperty("class", "control-checkbox")
         self.visualizer_toggle.stateChanged.connect(self.toggle_visualizer)
-        self.visualizer_toggle.setToolTip(QCoreApplication.translate("MainWindow", "Toggle elevator visualizer display"))
         control_layout.addWidget(self.visualizer_toggle)
 
         # Language selector
         language_layout = QHBoxLayout()
-        self.language_label = QLabel("语言：")
+        self.language_label = QLabel()
         self.language_label.setProperty("class", "control-label")
         self.language_selector = QComboBox()
-        if tm and tm.available_languages:
-            self.language_selector.addItems(tm.available_languages)
-            idx = self.language_selector.findText(tm.current_language)
-            if idx >= 0:
-                self.language_selector.setCurrentIndex(idx)
+        self.language_selector.addItems(translation_manager.available_languages)
+        idx = self.language_selector.findText(translation_manager.current_language)
+        assert idx != -1, f"Current language '{translation_manager.current_language}' not found in available languages"
+        self.language_selector.setCurrentIndex(idx)
         self.language_selector.currentTextChanged.connect(self.change_language)
         self.language_selector.setProperty("class", "control-combobox")
-        self.language_selector.setToolTip(QCoreApplication.translate("MainWindow", "Change interface language"))
         language_layout.addWidget(self.language_label)
         language_layout.addWidget(self.language_selector)
         control_layout.addLayout(language_layout)
 
         # Theme selector
         theme_layout = QHBoxLayout()
-        self.theme_label = QLabel("主题：")
+        self.theme_label = QLabel()
         self.theme_label.setProperty("class", "control-label")
         self.theme_selector = QComboBox()
-        self.theme_selector.addItems([
-            QCoreApplication.translate("MainWindow", "System Default"),
-            QCoreApplication.translate("MainWindow", "Light Mode"),
-            QCoreApplication.translate("MainWindow", "Dark Mode"),
-        ])
-        if getattr(theme_manager, "follow_system", True):
-            idx0 = 0
-        else:
-            idx0 = 1 if theme_manager.get_current_theme() == "light" else 2
-        self.theme_selector.setCurrentIndex(idx0)
+
+        # Store theme items for later translation
+        self.theme_items = [("", "system")]
+        for name in theme_manager.themes:
+            self.theme_items.append(("", name))
+
+        # Add items with empty text (will be populated in update_language)
+        for text, data in self.theme_items:
+            self.theme_selector.addItem(text, data)
+
+        # Set initial index based on current theme
+        curr = theme_manager.current_theme
+        idx = 0 if curr == "system" else self.theme_items.index(("", curr))
+        self.theme_selector.setCurrentIndex(idx)
         self.theme_selector.setProperty("class", "control-combobox")
         self.theme_selector.currentIndexChanged.connect(self.change_theme_mode)
-        self.theme_selector.setToolTip(QCoreApplication.translate("MainWindow", "Change theme appearance"))
         theme_layout.addWidget(self.theme_label)
         theme_layout.addWidget(self.theme_selector)
         control_layout.addLayout(theme_layout)
@@ -365,32 +393,48 @@ class MainWindow(QMainWindow):
 
     def change_language(self, language):
         logging.debug(f"Changing language to {language}")
-        if tm is not None:
-            tm.set_language(language)
+        translation_manager.set_language(language)
 
     def update_language(self):
         logging.debug("Updating MainWindow language")
-        self.setWindowTitle(QCoreApplication.translate("MainWindow", "Elevator Control System"))
-        self.reset_button.setText("🔄 " + QCoreApplication.translate("MainWindow", "Reset System"))
-        self.config_button.setText("⚙️ " + QCoreApplication.translate("MainWindow", "Configure Elevators"))
-        self.visualizer_toggle.setText("📊 " + QCoreApplication.translate("MainWindow", "Show Visualizer"))
-        self.control_title.setText("⚙️ " + QCoreApplication.translate("MainWindow", "Control Panel"))
-        self.language_label.setText("语言：")
-        self.theme_label.setText("主题：")
-        self.theme_selector.setItemText(0, QCoreApplication.translate("MainWindow", "System Default"))
-        self.theme_selector.setItemText(1, QCoreApplication.translate("MainWindow", "Light Mode"))
-        self.theme_selector.setItemText(2, QCoreApplication.translate("MainWindow", "Dark Mode"))
+
+        # Window title
+        self.setWindowTitle(tr("MainWindow", "Elevator Control System"))
+
+        # Control panel elements
+        self.control_title.setText(f"⚙️ {tr('MainWindow', 'Control Panel')}")
+        self.reset_button.setText(f"🔄 {tr('MainWindow', 'Reset System')}")
+        self.config_button.setText(f"⚙️ {tr('MainWindow', 'Configure Elevators')}")
+        self.visualizer_toggle.setText(f"📊 {tr('MainWindow', 'Show Visualizer')}")
+        self.language_label.setText(tr("MainWindow", "Language") + "：")
+        self.theme_label.setText(tr("MainWindow", "Theme") + "：")
+
+        # Update theme selector items
+        self.theme_items[0] = (tr("MainWindow", "System Default"), "system")
+        for i, (_, name) in enumerate(self.theme_items[1:], 1):
+            self.theme_items[i] = (tr("MainWindow", f"{name.capitalize()} Mode"), name)
+
+        # Update combobox texts
+        for i, (text, _) in enumerate(self.theme_items):
+            self.theme_selector.setItemText(i, text)
+
+        # Update language selector items
+        for i in range(self.language_selector.count()):
+            lang = self.language_selector.itemText(i)
+            translated_lang = tr("MainWindow", lang)
+            if translated_lang:
+                self.language_selector.setItemText(i, translated_lang)
 
         # Update tooltips
-        self.visualizer_toggle.setToolTip(QCoreApplication.translate("MainWindow", "Toggle elevator visualizer display"))
-        self.language_selector.setToolTip(QCoreApplication.translate("MainWindow", "Change interface language"))
-        self.theme_selector.setToolTip(QCoreApplication.translate("MainWindow", "Change theme appearance"))
-        self.reset_button.setToolTip(QCoreApplication.translate("MainWindow", "Reset all elevators to initial state"))
-        self.config_button.setToolTip(QCoreApplication.translate("MainWindow", "Change elevator system settings"))
+        self.visualizer_toggle.setToolTip(tr("MainWindow", "Toggle elevator visualizer display"))
+        self.language_selector.setToolTip(tr("MainWindow", "Change interface language"))
+        self.theme_selector.setToolTip(tr("MainWindow", "Change theme appearance"))
+        self.reset_button.setToolTip(tr("MainWindow", "Reset all elevators to initial state"))
+        self.config_button.setToolTip(tr("MainWindow", "Change elevator system settings"))
 
     def open_elevator_config_dialog(self):
         """Open the elevator configuration dialog"""
-        dialog = ElevatorConfigDialog(self.elevator_controller.config, self)
+        dialog = ConfigDialog(self.elevator_controller.config, self)
         if dialog.exec():
             # Get the new configuration values
             new_config_values = dialog.get_config_values()
@@ -398,27 +442,15 @@ class MainWindow(QMainWindow):
             logging.info("Elevator configuration applied successfully.")
         dialog.deleteLater()
 
-    def apply_theme(self, theme_name=None):
-        self.setStyleSheet(theme_manager.get_theme_styles(theme_name))
-
-        if hasattr(self, "theme_selector"):
-            if theme_manager.follow_system:
-                idx = 0
-            else:
-                idx = 1 if (theme_name or theme_manager.get_current_theme()) == "light" else 2
-
-            if self.theme_selector.currentIndex() != idx:
-                self.theme_selector.blockSignals(True)
-                self.theme_selector.setCurrentIndex(idx)
-                self.theme_selector.blockSignals(False)
-
     def change_theme_mode(self, index):
-        if index == 0:
-            theme_manager.set_follow_system()
-        elif index == 1:
-            theme_manager.set_theme("light")
-        elif index == 2:
-            theme_manager.set_theme("dark")
+        # apply selected theme
+        theme = self.theme_selector.itemData(index)
+        theme_manager.set_theme(theme)
+
+    def update_theme_colors(self, theme: str | None = None):
+        if theme is None:
+            theme = theme_manager.get_current_theme()
+        self.setStyleSheet(theme_manager.get_theme_styles(theme))
 
 
 class BuildingPanel(QFrame):
@@ -445,7 +477,7 @@ class BuildingPanel(QFrame):
         logo_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(logo_label)
 
-        self.title = QLabel("🏢 " + QCoreApplication.translate("BuildingPanel", "Floor Control"))
+        self.title = QLabel()
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setProperty("class", "building-title")
         layout.addWidget(self.title)
@@ -458,8 +490,10 @@ class BuildingPanel(QFrame):
 
         layout.addStretch()
 
-        if tm is not None:
-            tm.add_observer(self)
+        translation_manager.add_observer(self)
+
+        # Initialize translations
+        self.update_language()
 
     def _create_floor_buttons(self, layout):
         """Create floor buttons"""
@@ -470,8 +504,7 @@ class BuildingPanel(QFrame):
             floor_layout.setSpacing(15)
 
             # Create floor label
-            label_text = f"🚪 {floor_str} {QCoreApplication.translate('BuildingPanel', 'Floor')}"
-            floor_label = QLabel(label_text)
+            floor_label = QLabel()
             floor_label.setProperty("class", "building-floor-label")
             self.floor_labels[floor_str] = floor_label
             floor_layout.addWidget(floor_label)
@@ -482,7 +515,7 @@ class BuildingPanel(QFrame):
 
             # Add up button (except for top floor)
             if floor_str != self.floors_config[0]:
-                up_button = self._create_direction_button("▲", floor_str, "up", "Call elevator going up")
+                up_button = self._create_direction_button("▲", floor_str, "up")
                 up_button.setProperty("class", "building-call-button")
                 button_layout.addWidget(up_button)
                 self.up_buttons[floor_str] = up_button
@@ -491,7 +524,7 @@ class BuildingPanel(QFrame):
 
             # Add down button (except for bottom floor)
             if floor_str != self.floors_config[-1]:
-                down_button = self._create_direction_button("▼", floor_str, "down", "Call elevator going down")
+                down_button = self._create_direction_button("▼", floor_str, "down")
                 down_button.setProperty("class", "building-call-button")
                 button_layout.addWidget(down_button)
                 self.down_buttons[floor_str] = down_button
@@ -501,11 +534,10 @@ class BuildingPanel(QFrame):
             floor_layout.addLayout(button_layout)
             layout.addWidget(floor_widget)
 
-    def _create_direction_button(self, text, floor_str, direction, tooltip):
+    def _create_direction_button(self, text, floor_str, direction):
         """Create a direction button"""
         button = QPushButton(text)
         button.setCheckable(True)
-        button.setToolTip(QCoreApplication.translate("BuildingPanel", tooltip))
         button.clicked.connect(lambda checked, f=floor_str, d=direction: self.elevator_controller.handle_message_task(f"{'' if checked else 'cancel_'}call_{d}@{f}"))
         return button
 
@@ -533,16 +565,16 @@ class BuildingPanel(QFrame):
 
     def update_language(self):
         """Update UI text when language changes"""
-        self.title.setText(QCoreApplication.translate("BuildingPanel", "Floor Control"))
+        self.title.setText(f"🏢 {tr('BuildingPanel', 'Floor Control')}")
         for floor, label in self.floor_labels.items():
-            label.setText(f"{floor} {QCoreApplication.translate('BuildingPanel', 'Floor')}")
+            label.setText(f"{floor} {tr('BuildingPanel', 'Floor')}")
 
         # Update direction button tooltips
         for floor_str, button in self.up_buttons.items():
-            button.setToolTip(QCoreApplication.translate("BuildingPanel", "Call elevator going up"))
+            button.setToolTip(tr("BuildingPanel", "Call elevator going up"))
 
         for floor_str, button in self.down_buttons.items():
-            button.setToolTip(QCoreApplication.translate("BuildingPanel", "Call elevator going down"))
+            button.setToolTip(tr("BuildingPanel", "Call elevator going down"))
 
 
 class ElevatorPanel(QFrame):
@@ -564,7 +596,7 @@ class ElevatorPanel(QFrame):
         layout.setSpacing(4)
 
         # Add title
-        self.title = QLabel(f"🚁 {QCoreApplication.translate('ElevatorPanel', 'Elevator')} #{elevator_id}")
+        self.title = QLabel()
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setProperty("class", "elevator-title")
         layout.addWidget(self.title)
@@ -580,8 +612,10 @@ class ElevatorPanel(QFrame):
 
         layout.addStretch()
 
-        if tm is not None:
-            tm.add_observer(self)
+        translation_manager.add_observer(self)
+
+        # Initialize translations
+        self.update_elevator_status()
 
     def _create_status_display(self, layout):
         """Create status display area"""
@@ -590,17 +624,17 @@ class ElevatorPanel(QFrame):
         status_layout.setSpacing(2)
 
         # Create floor label
-        self.floor_label = QLabel(f"📍 {QCoreApplication.translate('ElevatorPanel', 'Current Floor')}: 1")
+        self.floor_label = QLabel()
         self.floor_label.setProperty("class", "elevator-status-label")
         status_layout.addWidget(self.floor_label)
 
         # Create door label
-        self.door_label = QLabel(f"🚪 {QCoreApplication.translate('ElevatorPanel', 'Door')}: {QCoreApplication.translate('ElevatorPanel', 'Closed')}")
+        self.door_label = QLabel()
         self.door_label.setProperty("class", "elevator-status-label")
         status_layout.addWidget(self.door_label)
 
         # Create direction label
-        self.direction_label = QLabel(f"🧭 {QCoreApplication.translate('ElevatorPanel', 'Direction')}: {QCoreApplication.translate('ElevatorPanel', 'Idle')}")
+        self.direction_label = QLabel()
         self.direction_label.setProperty("class", "elevator-status-label")
         status_layout.addWidget(self.direction_label)
 
@@ -613,13 +647,12 @@ class ElevatorPanel(QFrame):
         button_layout.setSpacing(4)
         button_layout.setContentsMargins(1, 1, 1, 1)
 
-        floor_positions = {"3": (0, 0), "2": (0, 1), "1": (1, 0), "-1": (1, 1)}
+        floor_positions = {"3": (0, 1), "2": (1, 1), "1": (0, 0), "-1": (1, 0)}
 
         for floor_str, pos in floor_positions.items():
             button = QPushButton(floor_str)
             button.setProperty("class", "elevator-floor-button")
             button.setCheckable(True)
-            button.setToolTip(QCoreApplication.translate("ElevatorPanel", "Select floor") + f" {floor_str}")
             button.clicked.connect(lambda checked, f=floor_str: self.elevator_controller.handle_message_task(f"{'' if checked else 'de'}select_floor@{f}#{self.elevator_id}"))
             button_layout.addWidget(button, pos[0], pos[1])
             self.floor_buttons[floor_str] = button
@@ -635,14 +668,13 @@ class ElevatorPanel(QFrame):
 
         # Create open/close door buttons
         self.door_button_info = [
-            ("open_door_button", "◀|▶", "open_door", QCoreApplication.translate("ElevatorPanel", "Open elevator doors")),
-            ("close_door_button", "▶|◀", "close_door", QCoreApplication.translate("ElevatorPanel", "Close elevator doors")),
+            ("open_door_button", "◀|▶", "open_door"),
+            ("close_door_button", "▶|◀", "close_door"),
         ]
 
-        for attr_name, label, command, tooltip in self.door_button_info:
+        for attr_name, label, command in self.door_button_info:
             button = QPushButton(label)
             button.setProperty("class", "door-control-button")
-            button.setToolTip(tooltip)
             button.clicked.connect(lambda _, cmd=command: self.elevator_controller.handle_message_task(f"{cmd}#{self.elevator_id}"))
             door_layout.addWidget(button)
             setattr(self, attr_name, button)
@@ -669,17 +701,8 @@ class ElevatorPanel(QFrame):
             assert isinstance(direction, Direction), f"Expected Direction type, got {type(direction)}"
             self._last_direction = direction
 
-        # Update floor display
-        current_floor_str = str(self._last_floor)
-        self.floor_label.setText(f"📍 {QCoreApplication.translate('ElevatorPanel', 'Current Floor')}: {current_floor_str}")
-
-        # Update door status display
-        door_text = QCoreApplication.translate("ElevatorPanel", self._last_door_state.name.capitalize())
-        self.door_label.setText(f"🚪 {QCoreApplication.translate('ElevatorPanel', 'Door')}: {door_text}")
-
-        # Update direction display
-        direction_text = QCoreApplication.translate("ElevatorPanel", self._last_direction.name.capitalize())
-        self.direction_label.setText(f"🧭 {QCoreApplication.translate('ElevatorPanel', 'Direction')}: {direction_text}")
+        # Update displayed text through update_language
+        self.update_language()
 
     def clear_floor_button(self, floor_str: str):
         """Clear the specified floor button selection state"""
@@ -698,22 +721,30 @@ class ElevatorPanel(QFrame):
 
     def update_language(self):
         """Update UI text when language changes"""
-        self.title.setText(f"{QCoreApplication.translate('ElevatorPanel', 'Elevator')} #{self.elevator_id}")
-        self.update_elevator_status()
+        self.title.setText(f"{tr('ElevatorPanel', 'Elevator')} #{self.elevator_id}")
+
+        current_floor_str = str(self._last_floor)
+        self.floor_label.setText(f"📍 {tr('ElevatorPanel', 'Floor')}: {current_floor_str}")
+
+        door_text = tr("ElevatorPanel", self._last_door_state.name.capitalize())
+        self.door_label.setText(f"🚪 {tr('ElevatorPanel', 'Door')}: {door_text}")
+
+        direction_text = tr("ElevatorPanel", self._last_direction.name.capitalize())
+        self.direction_label.setText(f"🧭 {tr('ElevatorPanel', 'Direction')}: {direction_text}")
 
         # Update floor button tooltips
         for floor_str, button in self.floor_buttons.items():
-            button.setToolTip(QCoreApplication.translate("ElevatorPanel", "Select floor") + f" {floor_str}")
+            button.setToolTip(tr("ElevatorPanel", "Select floor") + f" {floor_str}")
 
         # Update door control button tooltips
         if hasattr(self, "door_button_info"):
-            for attr_name, _, _, tooltip_template in self.door_button_info:
+            for attr_name, _, _ in self.door_button_info:
                 if hasattr(self, attr_name):
                     button = getattr(self, attr_name)
                     if attr_name == "open_door_button":
-                        button.setToolTip(QCoreApplication.translate("ElevatorPanel", "Open elevator doors"))
+                        button.setToolTip(tr("ElevatorPanel", "Open elevator doors"))
                     elif attr_name == "close_door_button":
-                        button.setToolTip(QCoreApplication.translate("ElevatorPanel", "Close elevator doors"))
+                        button.setToolTip(tr("ElevatorPanel", "Close elevator doors"))
 
 
 class ConsoleWidget(QFrame):
@@ -749,58 +780,56 @@ class ConsoleWidget(QFrame):
         layout = QVBoxLayout(self)
         layout.setSpacing(4)
 
-        # Enhanced console title with hacker aesthetic
-        self.title = QLabel("💻 " + QCoreApplication.translate("ConsoleWidget", "Command Console"))
+        # Console title
+        self.title = QLabel()
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title.setProperty("class", "console-title")
         layout.addWidget(self.title)
 
-        # Enhanced console output with modern terminal styling
+        # Console output
         self.console_output = QTextEdit()
         self.console_output.setReadOnly(True)
         self.console_output.setProperty("class", "console-output")
 
-        self.refresh_welcome_message()
-
         layout.addWidget(self.console_output)
 
-        # Enhanced input layout with modern styling
+        # Input layout
         input_layout = QHBoxLayout()
         input_layout.setSpacing(4)
 
-        self.input_label = QLabel("➜ " + QCoreApplication.translate("ConsoleWidget", "Command:"))
+        self.input_label = QLabel()
         self.input_label.setProperty("class", "console-input-label")
 
         self.console_input = QLineEdit()
         self.console_input.setProperty("class", "console-input")
-        self.console_input.setPlaceholderText(QCoreApplication.translate("ConsoleWidget", "Enter command, e.g.: call_up@1, select_floor@2#1..."))
         self.console_input.returnPressed.connect(self.execute_command)
-        self.console_input.setToolTip(QCoreApplication.translate("ConsoleWidget", "Type command and press Enter to execute"))
 
         input_layout.addWidget(self.input_label)
         input_layout.addWidget(self.console_input)
         layout.addLayout(input_layout)
 
-        if tm is not None:
-            tm.add_observer(self)
-
+        translation_manager.add_observer(self)
         theme_manager.theme_changed.connect(self.update_theme_colors)
+
+        # Initialize translations
+        self.update_language()
+        self.refresh_welcome_message()
 
     def get_theme_colors(self):
         theme = theme_manager.get_current_theme()
-        return self.color_scheme["dark" if theme == "dark" else "light"]
+        return self.color_scheme[theme]
 
     def refresh_welcome_message(self):
         self.console_output.clear()
         header_color = self.current_colors["header"]
         system_msg_color = self.current_colors["system_msg"]
 
-        self.console_output.append(f"<span style='color: {header_color}; font-weight: bold;'>╔══════════════════╗</span>")
-        self.console_output.append(f"<span style='color: {header_color}; font-weight: bold;'>║-ELEVATOR-CONTROL-║</span>")
-        self.console_output.append(f"<span style='color: {header_color}; font-weight: bold;'>╚══════════════════╝</span>")
-        self.console_output.append(f"<span style='color: {system_msg_color};'>" + QCoreApplication.translate("ConsoleWidget", "System initialized. Ready for commands...") + "</span>")
+        self.console_output.append(f"<span style='color: {header_color}; font-weight: bold;'>╔════════════════════════════════════╗</span>")
+        self.console_output.append(f"<span style='color: {header_color}; font-weight: bold;'>║ -------- ELEVATOR CONTROL -------- ║</span>")
+        self.console_output.append(f"<span style='color: {header_color}; font-weight: bold;'>╚════════════════════════════════════╝</span>")
+        self.console_output.append(f"<span style='color: {system_msg_color};'>{tr('ConsoleWidget', 'System initialized. Ready for commands...')}</span>")
 
-    def update_theme_colors(self, theme_name=None):
+    def update_theme_colors(self):
         self.current_colors = self.get_theme_colors()
         self.refresh_welcome_message()
 
@@ -826,9 +855,7 @@ class ConsoleWidget(QFrame):
     def update_language(self):
         """Update UI text when language changes"""
         logging.debug("Updating ConsoleWidget language")
-        self.title.setText(QCoreApplication.translate("ConsoleWidget", "Command Console"))
-        self.input_label.setText("➜ " + QCoreApplication.translate("ConsoleWidget", "Command:"))
-        self.console_input.setPlaceholderText(QCoreApplication.translate("ConsoleWidget", "Enter command, e.g.: call_up@1, select_floor@2#1..."))
-        self.console_input.setToolTip(QCoreApplication.translate("ConsoleWidget", "Type command and press Enter to execute"))
-
-        self.refresh_welcome_message()
+        self.title.setText(f"💻 {tr('ConsoleWidget', 'Command Console')}")
+        self.input_label.setText(f"➜ {tr('ConsoleWidget', 'Command:')}")
+        self.console_input.setPlaceholderText(tr("ConsoleWidget", "Enter command, e.g.: call_up@1, select_floor@2#1..."))
+        self.console_input.setToolTip(tr("ConsoleWidget", "Type command and press Enter to execute"))

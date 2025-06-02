@@ -2,10 +2,11 @@ import logging
 from collections import OrderedDict
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPalette, QPen
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QFrame
 
 from ..utils.common import Direction, ElevatorId, Floor, FloorLike
+from . import main_window
 
 
 class ElevatorVisualizer(QFrame):
@@ -60,10 +61,38 @@ class ElevatorVisualizer(QFrame):
         self._cached_dimensions = None
         self._last_widget_size = (0, 0)
 
-        # Subscribe to position updates
-        # event_bus.subscribe(Event.ELEVATOR_UPDATED, self._on_elevator_position_updated)
+        self.color_themes = {
+            "light": {
+                "text": QColor(0, 0, 0),
+                "window_text": QColor(0, 0, 0),
+                "background": QColor(255, 255, 255),
+                "dark": QColor(150, 150, 150),
+                "light": QColor(220, 220, 220),
+                "mid": QColor(180, 180, 180),
+                "floor_line": QColor(150, 150, 150),
+                "up": QColor(0, 200, 0),  # Green
+                "down": QColor(200, 0, 0),  # Red
+                "idle": QColor(100, 100, 100),  # Gray
+                "door": QColor(200, 200, 200),  # Light gray
+                "door_open": QColor(50, 50, 50),  # Dark gray
+            },
+            "dark": {
+                "text": QColor(220, 220, 220),
+                "window_text": QColor(240, 240, 240),
+                "background": QColor(40, 40, 40),
+                "dark": QColor(80, 80, 80),
+                "light": QColor(120, 120, 120),
+                "mid": QColor(100, 100, 100),
+                "floor_line": QColor(120, 120, 120),
+                "up": QColor(0, 255, 100),  # Bright green
+                "down": QColor(255, 100, 100),  # Bright red
+                "idle": QColor(150, 150, 150),  # Bright gray
+                "door": QColor(220, 220, 220),  # Bright white
+                "door_open": QColor(80, 80, 80),  # Dark gray
+            },
+        }
 
-        # Cache theme colors
+        main_window.theme_manager.theme_changed.connect(self._update_theme_colors)
         self._update_theme_colors()
 
     def set_elevator_count(self, count: int):
@@ -81,43 +110,30 @@ class ElevatorVisualizer(QFrame):
                     "direction": "idle",  # Initial direction
                 }
 
-    def _update_theme_colors(self):
-        """Retrieve current palette colors to adapt to system theme"""
-        palette = self.palette()
+    def _update_theme_colors(self, theme_name=None):
+        current_theme = theme_name or main_window.theme_manager.get_current_theme()
+        theme_colors = self.color_themes[current_theme]
 
-        # Basic colors
-        self.text_color = palette.color(QPalette.ColorRole.Text)
-        self.window_text_color = palette.color(QPalette.ColorRole.WindowText)
-        self.background_color = palette.color(QPalette.ColorRole.Window)
-        self.dark_color = palette.color(QPalette.ColorRole.Dark)
-        self.light_color = palette.color(QPalette.ColorRole.Light)
-        self.mid_color = palette.color(QPalette.ColorRole.Mid)
-        self.floor_line_color = palette.color(QPalette.ColorRole.Dark)
+        self.text_color = theme_colors["text"]
+        self.window_text_color = theme_colors["window_text"]
+        self.background_color = theme_colors["background"]
+        self.dark_color = theme_colors["dark"]
+        self.light_color = theme_colors["light"]
+        self.mid_color = theme_colors["mid"]
+        self.floor_line_color = theme_colors["floor_line"]
 
-        # Special colors (direction indicators)
-        is_dark_mode = self.background_color.lightness() < 128
+        self.up_color = theme_colors["up"]
+        self.down_color = theme_colors["down"]
+        self.idle_color = theme_colors["idle"]
+        self.door_color = theme_colors["door"]
+        self.door_open_color = theme_colors["door_open"]
 
-        if is_dark_mode:
-            # Use brighter colors for dark mode
-            self.up_color = QColor(0, 255, 100)  # Bright green
-            self.down_color = QColor(255, 100, 100)  # Bright red
-            self.idle_color = QColor(150, 150, 150)  # Bright gray
-            self.door_color = QColor(220, 220, 220)  # Bright white
-            self.door_open_color = QColor(80, 80, 80)  # Dark gray
-        else:
-            # Use standard colors for light mode
-            self.up_color = QColor(0, 200, 0)  # Green
-            self.down_color = QColor(200, 0, 0)  # Red
-            self.idle_color = QColor(100, 100, 100)  # Gray
-            self.door_color = QColor(200, 200, 200)  # Light gray
-            self.door_open_color = QColor(50, 50, 50)  # Dark gray
+        self.update()
 
     def changeEvent(self, event):
         """Called when a window event occurs, including palette changes"""
         if event.type() == event.Type.PaletteChange:
-            # Update colors when the palette changes (e.g., switching to dark mode)
             self._update_theme_colors()
-            self.update()  # Trigger repaint
         super().changeEvent(event)
 
     def _calculate_floor_positions(self):
@@ -249,11 +265,12 @@ class ElevatorVisualizer(QFrame):
                 painter.drawLine(int(x + self.ELEVATOR_WIDTH), int(shaft_top), int(x + self.ELEVATOR_WIDTH), int(shaft_bottom))
 
         # Draw horizontal floor lines
+        padding = 20
         painter.setPen(QPen(self.light_color, 1, Qt.PenStyle.SolidLine))
         for i in range(len(self.floors) + 1):
             y_pos = cache["building_y"] + cache["total_height"] - (i + 1) * self.FLOOR_HEIGHT
-            painter.drawLine(0, int(y_pos + self.ELEVATOR_HEIGHT), width, int(y_pos + self.ELEVATOR_HEIGHT))
-            painter.drawLine(0, int(y_pos + self.FLOOR_HEIGHT), width, int(y_pos + self.FLOOR_HEIGHT))
+            painter.drawLine(padding, int(y_pos + self.ELEVATOR_HEIGHT), width - padding, int(y_pos + self.ELEVATOR_HEIGHT))
+            painter.drawLine(padding, int(y_pos + self.FLOOR_HEIGHT), width - padding, int(y_pos + self.FLOOR_HEIGHT))
 
     def _draw_elevators(self, painter, width, height):
         """Draw all elevators with dynamic positioning based on elevator count"""

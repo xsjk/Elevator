@@ -5,6 +5,7 @@ import sys
 import re
 
 from PySide6.QtCore import QTranslator
+from PySide6.QtCore import QCoreApplication
 
 
 class TranslationManager:
@@ -13,7 +14,7 @@ class TranslationManager:
     Uses Qt's translation mechanism with .qm files
     """
 
-    def __init__(self, app):
+    def __init__(self, app: QCoreApplication, default_language: str = "中文"):
         """Initialize the translation manager"""
         self.app = app
         self.translator = QTranslator()
@@ -21,11 +22,12 @@ class TranslationManager:
 
         # Map for detected languages (will be populated in scan_available_languages)
         self.language_to_locale = {}
-        self.available_languages = []
 
         # Default language (will be updated after scanning)
-        self.default_language = "English"
-        self.current_language = self.default_language
+        self.default_language = default_language
+        self.current_language = None
+
+        self.initialize_translations()
 
     def scan_available_languages(self):
         """Scan translations directory and detect available languages"""
@@ -72,10 +74,7 @@ class TranslationManager:
 
         logging.debug(f"Detected available languages: {self.available_languages}")
 
-        # Set default language to Chinese if available, otherwise use English
-        if "中文" in self.available_languages:
-            self.default_language = "中文"
-        else:
+        if self.default_language not in self.available_languages:
             self.default_language = "English"
 
         self.set_language(self.default_language)

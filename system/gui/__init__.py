@@ -16,11 +16,6 @@ def setup() -> QEventLoop:
     if app is None:
         app = QApplication(sys.argv)
 
-    if main_window.tm is None:
-        tm = TranslationManager(app)
-        tm.initialize_translations()
-        main_window.tm = tm
-
     event_loop = QEventLoop(app)
     return event_loop
 

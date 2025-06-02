@@ -49,7 +49,7 @@
         <translation>电梯</translation>
     </message>
     <message>
-        <source>Current Floor</source>
+        <source>Floor</source>
         <translation>当前楼层</translation>
     </message>
     <message>
@@ -207,8 +207,8 @@
         <translation>门保持开启时间:</translation>
     </message>
     <message>
-        <source>Note: Changing elevator count requires system restart.</source>
-        <translation>注意：更改电梯数量需要重启系统。</translation>
+        <source>Note: Changing the timings takes effect at next floor if the elevator is in motion.</source>
+        <translation>注意: 如果电梯正在运行中，更改时间设置将在电梯到达下一个楼层时生效。</translation>
     </message>
     <message>
         <source>s</source>
