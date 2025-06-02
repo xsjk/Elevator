@@ -2,7 +2,7 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from .common import Direction, ElevatorVisualizer, Floor, ThemeManager, main_window
+from common import Direction, ElevatorVisualizer, Floor, ThemeManager, main_window
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 

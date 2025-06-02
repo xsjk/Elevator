@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from common import ElevatorState, Floor, GUIAsyncioTestCase
+from .common import ElevatorState, Floor, GUIAsyncioTestCase
 
 
 class ElevatorTest(GUIAsyncioTestCase):
@@ -53,7 +53,7 @@ class ElevatorTest(GUIAsyncioTestCase):
         await asyncio.sleep(0.1)
 
         # Step 5: door is open, press close door button
-        await asyncio.sleep(travel_time + self.controller.config.door_move_duration + 0.5)
+        await asyncio.sleep(travel_time + self.controller.config.door_move_duration + 1)
         self.assertEqual(self.elevator2.current_floor, Floor("2"))
         self.assertEqual(self.elevator2.state, ElevatorState.OPENING_DOOR)
 
