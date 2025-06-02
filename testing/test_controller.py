@@ -1,10 +1,10 @@
 import asyncio
 import unittest
 
-from common import Controller, Direction, Floor, GUIAsyncioTestCase
+from common import Controller, Direction, Floor
 
 
-class TestController(GUIAsyncioTestCase):
+class TestController(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.controller = Controller()
         self.controller.start()
@@ -54,19 +54,19 @@ class TestController(GUIAsyncioTestCase):
         self.assertEqual(self.controller.elevators[1].current_floor, Floor("2"))
 
     async def test_handle_deselect_floor(self):
-        # 模拟 select_floor 并立即取消（不要等它执行完）
-        task = self.controller.handle_message_task("select_floor@2#1")
-        await asyncio.sleep(0.05)  # 给一点时间让任务开始执行但未完成
+        # Simulate selecting and deselecting a floor without waiting for the task to complete
+        self.controller.handle_message_task("select_floor@2#1")
+        await asyncio.sleep(0.05)
 
-        # 确保 floor 被选中
+        # Ensure the floor is selected
         elevator = self.controller.elevators[1]
         self.assertIn(Floor("2"), elevator.selected_floors)
 
-        # 现在取消选择
+        # Now deselect the floor
         await self.controller.handle_message("deselect_floor@2#1")
         await asyncio.sleep(0.05)
 
-        # 验证任务被移除，楼层也被取消
+        # Verify the floor is deselected
         self.assertNotIn(Floor("2"), elevator.selected_floors)
         self.assertNotIn("select_floor@2#1", self.controller.message_tasks)
 

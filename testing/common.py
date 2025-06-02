@@ -1,3 +1,5 @@
+import asyncio
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -6,9 +8,11 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from system import gui
 from system.core.controller import Controller
-from system.core.elevator import Elevator, TargetFloorChains, logger
+from system.core.elevator import Elevator, TargetFloors, TargetFloorChains, logger
 from system.gui.gui_controller import GUIController
+from system.gui.main_window import ElevatorPanel
 from system.utils.common import Direction, DoorDirection, DoorState, ElevatorId, ElevatorState, Event, Floor, FloorAction, FloorLike
+from system.utils.zmq_async import Client, Server
 
 logger.setLevel("CRITICAL")  # Suppress logging during tests
 
@@ -21,20 +25,38 @@ class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
         self.controller.start()
         self.window = self.controller.window
         self.building = self.window.building_panel
-        self.elevator1_UI = self.window.elevator_panels[1]
-        self.elevator2_UI = self.window.elevator_panels[2]
-        self.elevator1 = self.controller.elevators[1]
-        self.elevator2 = self.controller.elevators[2]
+
+    elevator1: Elevator
+    elevator2: Elevator
+    elevator1_UI: ElevatorPanel
+    elevator2_UI: ElevatorPanel
+
+    def __getattribute__(self, name: str):
+        if match := re.match(r"elevator(\d+)_UI", name):
+            elevator_id = int(match.group(1))
+            return self.window.elevator_panels[elevator_id]
+        elif match := re.match(r"elevator(\d+)", name):
+            elevator_id = int(match.group(1))
+            return self.controller.elevators[elevator_id]
+        return super().__getattribute__(name)
 
     async def asyncTearDown(self):
         await self.controller.stop()
         self.window.close()
 
 
+async def message_sender(server: Server, client_addr: str, queue: asyncio.Queue):
+    while True:
+        message = await queue.get()
+        await server.send(client_addr, message)
+        queue.task_done()
+
+
 __all__ = [
     "GUIAsyncioTestCase",
     "Controller",
     "Elevator",
+    "TargetFloors",
     "TargetFloorChains",
     "logger",
     "GUIController",
@@ -47,4 +69,7 @@ __all__ = [
     "Floor",
     "FloorAction",
     "FloorLike",
+    "Client",
+    "Server",
+    "message_sender",
 ]

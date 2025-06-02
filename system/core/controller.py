@@ -106,7 +106,6 @@ class Controller:
         # Empty the queue
         while not self.queue.empty():
             self.queue.get_nowait()
-        self.queue.put_nowait("reset")
 
         # Reset elevators
         self.__post_init__()

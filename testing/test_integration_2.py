@@ -38,7 +38,6 @@ class ElevatorTest(GUIAsyncioTestCase):
         await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration)
 
         # Step 4: wait elevator reaches -1, then press up button on floor 2
-        # 估计 -1 到达时间
         travel = self.controller.calculate_duration(n_floors=2, n_stops=0)
         await asyncio.sleep(travel)
 

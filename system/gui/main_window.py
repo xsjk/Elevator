@@ -667,18 +667,15 @@ class ElevatorPanel(QFrame):
         door_layout = QHBoxLayout(door_frame)
         door_layout.setSpacing(2)
 
-        # Create open/close door buttons
-        self.door_button_info = [
-            ("open_door_button", "◀|▶", "open_door"),
-            ("close_door_button", "▶|◀", "close_door"),
-        ]
+        self.open_door_button = QPushButton("◀|▶")
+        self.open_door_button.setProperty("class", "door-control-button")
+        self.open_door_button.clicked.connect(lambda: self.elevator_controller.handle_message_task(f"open_door#{self.elevator_id}"))
+        door_layout.addWidget(self.open_door_button)
 
-        for attr_name, label, command in self.door_button_info:
-            button = QPushButton(label)
-            button.setProperty("class", "door-control-button")
-            button.clicked.connect(lambda _, cmd=command: self.elevator_controller.handle_message_task(f"{cmd}#{self.elevator_id}"))
-            door_layout.addWidget(button)
-            setattr(self, attr_name, button)
+        self.close_door_button = QPushButton("▶|◀")
+        self.close_door_button.setProperty("class", "door-control-button")
+        self.close_door_button.clicked.connect(lambda: self.elevator_controller.handle_message_task(f"close_door#{self.elevator_id}"))
+        door_layout.addWidget(self.close_door_button)
 
         layout.addWidget(door_frame)
 
@@ -738,14 +735,8 @@ class ElevatorPanel(QFrame):
             button.setToolTip(tr("ElevatorPanel", "Select floor") + f" {floor_str}")
 
         # Update door control button tooltips
-        if hasattr(self, "door_button_info"):
-            for attr_name, _, _ in self.door_button_info:
-                if hasattr(self, attr_name):
-                    button = getattr(self, attr_name)
-                    if attr_name == "open_door_button":
-                        button.setToolTip(tr("ElevatorPanel", "Open elevator doors"))
-                    elif attr_name == "close_door_button":
-                        button.setToolTip(tr("ElevatorPanel", "Close elevator doors"))
+        self.open_door_button.setToolTip(tr("ElevatorPanel", "Open elevator doors"))
+        self.close_door_button.setToolTip(tr("ElevatorPanel", "Close elevator doors"))
 
 
 class ConsoleWidget(QFrame):

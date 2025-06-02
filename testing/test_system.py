@@ -7,9 +7,7 @@ from common import DoorState, ElevatorState, Floor, GUIAsyncioTestCase
 class SystemTestOpenDoor(GUIAsyncioTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
-
         self.elevator2.current_floor = 3
-        self.elevator2_UI.update_elevator_status(self.elevator2.current_floor, self.elevator2.state.get_door_state(), self.elevator2.state.get_moving_direction())
 
     async def test_open_door_by_button_and_autoclose(self):
         """UC1-a: Static press open door button -> door opens"""
@@ -52,19 +50,21 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.building.down_buttons["2"].click()
         await asyncio.sleep(self.controller.config.floor_travel_duration + 0.2)
 
-        # 检查是否到达目标楼层
+        # Assert elevator has arrived at floor 2
         self.assertEqual(self.elevator1.current_floor, Floor("2"))
 
-        # 检查门是否自动打开
+        # Door should open automatically
         self.assertEqual(self.elevator1.state, ElevatorState.OPENING_DOOR)
         self.assertIn("开", self.elevator1_UI.door_label.text())
 
         await asyncio.sleep(4)
-        # 门应自动关闭
+        # Door should close automatically after stay duration
         self.assertEqual(self.elevator1.state, ElevatorState.CLOSING_DOOR)
 
+        await asyncio.sleep(0.5)
         self.building.down_buttons["2"].click()
-        await asyncio.sleep(1)
+
+        await asyncio.sleep(0.1)
         self.assertEqual(self.elevator1.state, ElevatorState.OPENING_DOOR)
 
     async def test_close_door_by_button(self):

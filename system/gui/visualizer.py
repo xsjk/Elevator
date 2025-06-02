@@ -92,7 +92,8 @@ class ElevatorVisualizer(QFrame):
             },
         }
 
-        main_window.theme_manager.theme_changed.connect(self._update_theme_colors)
+        if hasattr(main_window, "theme_manager"):
+            main_window.theme_manager.theme_changed.connect(self._update_theme_colors)
         self._update_theme_colors()
 
     def set_elevator_count(self, count: int):
