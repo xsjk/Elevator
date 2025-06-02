@@ -81,33 +81,6 @@ class TestController(unittest.IsolatedAsyncioTestCase):
     async def test_unrecognized_message_warning(self):
         await self.controller.handle_message("foobar@unknown")
 
-    async def test_calculate_duration(self):
-        duration = self.controller.calculate_duration(3, 2)
-        expected = 3 * self.controller.config.floor_travel_duration + 2 * (self.controller.config.door_move_duration * 2 + self.controller.config.door_stay_duration)
-        self.assertEqual(duration, expected)  # 19.0
-
-    async def test_estimate_arrival_time_cases(self):
-        elevator = self.controller.elevators[1].copy()
-
-        # Test Case 1: Same floor, IDLE
-        elevator.current_floor = Floor("1")
-        elevator.target_floor_chains.clear()
-        time_same = self.controller.estimate_arrival_time(elevator, Floor("1"), Direction.IDLE)
-        self.assertAlmostEqual(time_same, 5.0, delta=0.1)
-
-        # Test Case 2: Target floor is above, 3 floors away, no stops
-        elevator.current_floor = Floor("1")
-        elevator.target_floor_chains.clear()
-        time_up = self.controller.estimate_arrival_time(elevator, Floor("4"), Direction.UP)
-        self.assertAlmostEqual(time_up, 13.0, delta=0.1)
-
-        # Test Case 3: Elevator is moving
-        elevator.current_floor = Floor("5")
-        elevator.target_floor_chains.clear()
-        elevator.commit_floor(Floor("4"), Direction.DOWN)
-        time_down = self.controller.estimate_arrival_time(elevator, Floor("3"), Direction.DOWN)
-        self.assertAlmostEqual(time_down, 15.0, delta=0.1)
-
     async def test_call_elevator(self):
         await self.controller.call_elevator(Floor("2"), Direction.UP)
         self.assertEqual(self.controller.elevators[1].current_floor, 2)

@@ -12,12 +12,12 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
     async def test_open_door_by_button_and_autoclose(self):
         """UC1-a: Static press open door button -> door opens"""
         """UC2-b: Door auto-closes after stay duration if no action"""
-        # 用户点击 open door
+        # User clicks open door
         self.elevator1_UI.open_door_button.click()
         self.elevator2_UI.open_door_button.click()
-        await asyncio.sleep(0.5)  # 给电梯状态机反应时间
+        await asyncio.sleep(0.5)  # Give the elevator state machine time to react
 
-        # 检查门是否已打开
+        # Check if the door is open
         self.assertTrue(self.elevator1.state.is_door_open())
         self.assertTrue(self.elevator2.state.is_door_open())
         self.assertIn("开", self.elevator1_UI.door_label.text())
@@ -30,11 +30,11 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.assertIn("关", self.elevator2_UI.door_label.text())
 
     async def test_open_door_after_close_button(self):
-        # 用户点击 open door
+        # User clicks open door
         self.elevator1_UI.open_door_button.click()
-        await asyncio.sleep(0.5)  # 给电梯状态机反应时间
+        await asyncio.sleep(0.5)  # Give the elevator state machine time to react
 
-        # 检查门是否已打开
+        # Check if the door is open
         self.assertTrue(self.elevator1.state.is_door_open())
         self.assertIn("开", self.elevator1_UI.door_label.text())
 
@@ -71,31 +71,31 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         """UC2-a: Manually press close door when open -> door starts closing"""
         self.assertFalse(self.elevator1.state.is_door_open())
 
-        # 模拟点击“Open Door”按钮
+        # Simulate clicking the "Open Door" button
         self.elevator1_UI.open_door_button.click()
         self.elevator2_UI.open_door_button.click()
         await asyncio.sleep(0.1)
         self.assertEqual(self.elevator1.state.get_door_state(), DoorState.OPENING)
         self.assertEqual(self.elevator2.state.get_door_state(), DoorState.OPENING)
 
-        # 点击“Close Door”按钮
+        # Click the "Close Door" button
         self.elevator1_UI.close_door_button.click()
         self.elevator2_UI.close_door_button.click()
         await asyncio.sleep(4)
 
-        # 检查 controller 中的任务
+        # Check tasks in the controller
         self.assertEqual(self.elevator1.state.get_door_state(), DoorState.CLOSING)
         self.assertEqual(self.elevator2.state.get_door_state(), DoorState.CLOSING)
 
     async def test_auto_close_moved(self):
         """UC2-c: Elevator moving, door keeps closed."""
-        # 请求电梯从 1 → 3
+        # Request elevator from 1 → 3
         self.elevator1_UI.floor_buttons["3"].click()
         await asyncio.sleep(0.1)
 
-        moving_duration = self.controller.calculate_duration(n_floors=2, n_stops=0)
+        moving_duration = self.elevator1.calculate_duration(n_floors=2, n_stops=0)
 
-        # 在移动过程中多次采样 elevator 状态
+        # Sample elevator status multiple times during movement
         interval = 0.2
         steps = int(moving_duration // interval) + 1
         for _ in range(steps):
@@ -105,7 +105,7 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
             await asyncio.sleep(interval)
 
         await asyncio.sleep(1.0)
-        # 最终应到达 3 层且门打开
+        # Should finally arrive at floor 3 with door open
         self.assertEqual(self.controller.elevators[1].current_floor, Floor("3"))
         self.assertTrue(self.controller.elevators[1].state.is_door_open())
 
@@ -115,15 +115,15 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.elevator2_UI.floor_buttons["2"].click()
         await asyncio.sleep(0.1)
 
-        # 控制器任务应注册
+        # Controller tasks should be registered
         self.assertIn("select_floor@2#1", self.controller.message_tasks)
         self.assertIn("select_floor@2#2", self.controller.message_tasks)
 
-        # 等待电梯运行完成
-        duration = self.controller.calculate_duration(n_floors=1, n_stops=0)
+        # Wait for elevator operation to complete
+        duration = self.elevator1.calculate_duration(n_floors=1, n_stops=0)
         await asyncio.sleep(duration + 0.5)
 
-        # 电梯应到达目标楼层并开门
+        # Elevator should reach target floor and open door
         self.assertEqual(self.elevator1.current_floor, 2)
         self.assertEqual(self.elevator2.current_floor, 2)
         self.assertTrue(self.elevator1.state.is_door_open())
@@ -143,17 +143,17 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.elevator2_UI.floor_buttons["-1"].click()
         await asyncio.sleep(0.1)
 
-        # 控制器任务应包含两个目标
+        # Controller tasks should include two targets
         self.assertIn("select_floor@2#1", self.controller.message_tasks)
         self.assertIn("select_floor@3#1", self.controller.message_tasks)
         self.assertIn("select_floor@1#2", self.controller.message_tasks)
         self.assertIn("select_floor@-1#2", self.controller.message_tasks)
 
-        # 等待电梯完成两段运行
-        duration = self.controller.calculate_duration(4, 1)
+        # Wait for elevator to complete two runs
+        duration = self.elevator1.calculate_duration(4, 1)
         await asyncio.sleep(duration + 1.0)
 
-        # 电梯最终到达
+        # Elevator finally arrives
         self.assertEqual(self.elevator1.current_floor, Floor("3"))
         self.assertEqual(self.elevator2.current_floor, Floor("-1"))
 
@@ -179,35 +179,35 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.assertTrue(self.elevator1_UI.floor_buttons["3"].isChecked())
         self.assertTrue(self.elevator1_UI.floor_buttons["2"].isChecked())
 
-        # 取消其中一个楼层
+        # Cancel one of the floors
         self.elevator1_UI.floor_buttons["3"].click()
         await asyncio.sleep(0.1)
 
-        # 检查 UI 状态
+        # Check UI status
         self.assertFalse(self.elevator1_UI.floor_buttons["3"].isChecked())
         self.assertTrue(self.elevator1_UI.floor_buttons["2"].isChecked())
 
-        # 等待运行完成，应只到 2 层
-        await asyncio.sleep(self.controller.calculate_duration(1, 0) + 0.5)
+        # Wait for operation to complete, should only go to floor 2
+        await asyncio.sleep(self.elevator1.calculate_duration(1, 0) + 0.5)
         self.assertEqual(self.elevator1.current_floor, Floor("2"))
 
     async def test_call_elevator_up_button(self):
         """UC5: Press 'up' button on floor 2 → elevator 1 responds and door opens"""
-        # 用户在 2 层按下“上”按钮
+        # User presses "up" button on floor 2
         self.building.up_buttons["2"].click()
         await asyncio.sleep(0.1)
 
-        # 控制器任务应包含该请求
+        # Controller tasks should include this request
         self.assertIn("call_up@2", self.controller.message_tasks)
 
-        # 等待 elevator 1 到达目标楼层
-        move_duration = self.controller.calculate_duration(n_floors=1, n_stops=0)
+        # Wait for elevator 1 to reach target floor
+        move_duration = self.elevator1.calculate_duration(n_floors=1, n_stops=0)
         await asyncio.sleep(move_duration + 0.5)
 
-        # 电梯应在目标楼层
+        # Elevator should be at target floor
         self.assertEqual(self.elevator1.current_floor, 2)
 
-        # 楼层标签应正确
+        # Floor label should be correct
         self.assertIn("2", self.window.elevator_panels[1].floor_label.text())
 
     async def test_display_info_inside_and_outside(self):
@@ -215,11 +215,11 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.elevator1_UI.floor_buttons["3"].click()
         await asyncio.sleep(0.1)
 
-        # UC6-a: 楼层3按钮应点亮
+        # UC6-a: Floor 3 button should light up
         self.assertTrue(self.elevator1_UI.floor_buttons["3"].isChecked(), "Floor 3 button should be checked")
 
-        #  检查电梯运行中信息显示
-        move_duration = self.controller.calculate_duration(2, 1)
+        # Check elevator information display during operation
+        move_duration = self.elevator1.calculate_duration(2, 1)
         sample_interval = 0.3
         steps = int(move_duration / sample_interval)
 
@@ -227,14 +227,14 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
             state = self.controller.elevators[1].state
             current_floor = self.controller.elevators[1].current_floor
 
-            # UC6-b: 当前楼层显示更新
+            # UC6-b: Current floor display update
             self.assertIn(str(current_floor), self.elevator1_UI.floor_label.text())
 
-            #  UC6-c: 门应关闭
+            # UC6-c: Door should be closed
             if state.is_moving():
                 self.assertIn("关", self.elevator1_UI.door_label.text())
 
-                # UC6-d: 显示方向（UP / DOWN）
+                # UC6-d: Display direction (UP / DOWN)
                 dir_text = self.elevator1_UI.direction_label.text()
                 self.assertIn("上", dir_text.upper())
             else:
@@ -243,48 +243,48 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
 
             await asyncio.sleep(sample_interval)
 
-        # 到达目标楼层后：
+        # After reaching target floor:
         await asyncio.sleep(0.5)
 
-        # UC6-a: 按钮应取消选中
+        # UC6-a: Button should be unchecked
         self.assertFalse(self.elevator1_UI.floor_buttons["3"].isChecked())
 
-        #  UC6-b/c: 楼层应为 3，门应 Open
+        # UC6-b/c: Floor should be 3, door should be Open
         self.assertEqual(self.elevator1.current_floor, Floor("3"))
         self.assertIn("3", self.elevator1_UI.floor_label.text())
 
-        # UC6-e: 外部按钮应响应到达
-        # 用户按下外部按钮（模拟有人呼叫）
+        # UC6-e: External button should respond to arrival
+        # User presses external button (simulating someone calling)
         self.building.down_buttons["2"].click()
         await asyncio.sleep(0.1)
 
-        # 外部按钮应点亮（isChecked）
+        # External button should light up (isChecked)
         self.assertTrue(self.building.down_buttons["2"].isChecked())
 
-        # 等电梯完成开门后，按钮应熄灭
+        # After elevator completes door opening, button should turn off
         await asyncio.sleep(self.controller.config.floor_travel_duration + 3.5)
         self.assertFalse(self.building.down_buttons["2"].isChecked())
 
     async def test_multiple_calls_outside(self):
         """EM1: Multiple floors press external call buttons → elevators dispatched correctly"""
 
-        # 按下多个外部按钮
+        # Press multiple external buttons
         self.building.down_buttons["2"].click()
         self.building.up_buttons["2"].click()
         await asyncio.sleep(0.2)
 
-        # 系统应记录多个任务
+        # System should record multiple tasks
         self.assertIn("call_down@2", self.controller.message_tasks)
         self.assertIn("call_up@2", self.controller.message_tasks)
 
-        # 等待电梯响应和运行
-        await asyncio.sleep(self.controller.calculate_duration(1, 0) + 1.0)
+        # Wait for elevator response and operation
+        await asyncio.sleep(self.elevator1.calculate_duration(1, 0) + 1.0)
 
-        # Elevator 2 应到达 3 层，门应打开
+        # Elevator 2 should reach floor 3, door should open
         self.assertEqual(self.elevator2.current_floor, Floor("2"))
         self.assertTrue(self.elevator2.state.is_door_open())
 
-        # Elevator 1 应到达 2 层
+        # Elevator 1 should reach floor 2
         self.assertEqual(self.elevator1.current_floor, Floor("2"))
         self.assertTrue(self.elevator1.state.is_door_open())
 
@@ -293,18 +293,18 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.elevator1.current_floor = Floor("-1")
         self.elevator1_UI.update_elevator_status(self.elevator2.current_floor, self.elevator2.state.get_door_state(), self.elevator2.state.get_moving_direction())
 
-        # 模拟 2 层按上行按钮（距离电梯 2 更近）
+        # Simulate pressing up button on floor 2 (closer to elevator 2)
         self.window.building_panel.up_buttons["2"].click()
         await asyncio.sleep(0.2)
 
-        # 记录电梯位置，等待响应
-        await asyncio.sleep(self.controller.calculate_duration(1, 0) + 1.0)
+        # Record elevator position, wait for response
+        await asyncio.sleep(self.elevator1.calculate_duration(1, 0) + 1.0)
 
-        # Elevator 2 应响应该请求
+        # Elevator 2 should respond to the request
         self.assertEqual(self.elevator2.current_floor, Floor("2"))
         self.assertTrue(self.elevator2.state.is_door_open())
 
-        # Elevator 1 应未移动
+        # Elevator 1 should not move
         self.assertEqual(self.elevator1.current_floor, Floor("-1"))
 
 

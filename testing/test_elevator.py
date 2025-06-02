@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from common import Direction, DoorDirection, Elevator, ElevatorState, FloorAction
+from .common import Direction, DoorDirection, Elevator, ElevatorState, FloorAction
 
 
 class TestElevator(unittest.IsolatedAsyncioTestCase):
@@ -119,22 +119,22 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(close_time_2, 2.0, delta=0.1)
 
     def test_estimate_door_open_time_precise(self):
-        self.elevator._door_last_state_change_time = self.elevator.event_loop.time() - 1.0
+        self.elevator._door_last_state_change_time = self.elevator.event_loop.time() - 0.4
 
         # TestCase 1
         self.elevator.state = ElevatorState.OPENING_DOOR
         open_time_1 = self.elevator.estimate_door_open_time()
-        self.assertAlmostEqual(open_time_1, 5.0, delta=0.1)
+        self.assertAlmostEqual(open_time_1, self.elevator.door_move_duration - 0.4, delta=0.01)
 
         # TestCase 2
         self.elevator.state = ElevatorState.STOPPED_DOOR_OPENED
         open_time_2 = self.elevator.estimate_door_open_time()
-        self.assertAlmostEqual(open_time_2, 2.0, delta=0.1)
+        self.assertEqual(open_time_2, 0)
 
         # TestCase 3
         self.elevator.state = ElevatorState.CLOSING_DOOR
         close_time_2 = self.elevator.estimate_door_open_time()
-        self.assertAlmostEqual(close_time_2, 4.0, delta=0.1)
+        self.assertAlmostEqual(close_time_2, self.elevator.door_stay_duration + 0.4, delta=0.01)
 
     async def test_pop_target(self):
         # TestCase 1
@@ -354,6 +354,121 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
     async def test_commited_direction(self):
         self.elevator.target_floor_chains.direction = Direction.UP
         self.assertEqual(self.elevator.committed_direction, Direction.UP)
+
+    async def test_calculate_duration(self):
+        duration = self.elevator.calculate_duration(3, 2)
+        expected = 3 * self.elevator.floor_travel_duration + 2 * (self.elevator.door_move_duration * 2 + self.elevator.door_stay_duration)
+        self.assertEqual(duration, expected)
+
+    async def test_estimate_arrival_time_cases(self):
+        # Test Case 1: Same floor, IDLE
+        self.elevator.current_floor = 1
+        t = self.elevator.estimate_arrival_time(1, Direction.IDLE)
+        self.assertAlmostEqual(t, self.elevator.door_move_duration)
+
+        # Test Case 2: Target floor is above, 3 floors away, no stops
+        self.elevator.current_floor = 1
+        t = self.elevator.estimate_arrival_time(4, Direction.UP)
+        self.assertAlmostEqual(
+            t,
+            sum((
+                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+            )),
+        )
+
+        # Test Case 3: Elevator is moving
+        self.elevator.current_floor = 5
+
+        await self.elevator.commit_door(DoorDirection.OPEN)
+
+        self.assertEqual(self.elevator.state, ElevatorState.OPENING_DOOR)
+
+        self.elevator.commit_floor(4, Direction.DOWN)
+        await asyncio.sleep(0.01)
+
+        self.assertEqual(self.elevator.current_floor, 5)
+
+        t = self.elevator.estimate_arrival_time(3, Direction.DOWN)
+        self.assertAlmostEqual(
+            t,
+            sum((
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+            )),
+            delta=0.1,
+        )
+
+        await asyncio.sleep(self.elevator.door_move_duration)
+        self.assertEqual(self.elevator.state, ElevatorState.STOPPED_DOOR_OPENED)
+        self.assertEqual(self.elevator.current_floor, 5)
+
+        await self.elevator.commit_door(DoorDirection.CLOSE)
+        self.assertEqual(self.elevator.state, ElevatorState.CLOSING_DOOR)
+        self.assertEqual(self.elevator.current_floor, 5)
+
+        self.assertAlmostEqual(
+            self.elevator.estimate_arrival_time(3, Direction.DOWN),
+            sum((
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+            )),
+            delta=0.1,
+        )
+
+        await asyncio.sleep(self.elevator.door_move_duration + 0.05)
+        self.assertEqual(self.elevator.state, ElevatorState.MOVING_DOWN)
+
+        self.elevator.commit_floor(2, Direction.DOWN)
+        await asyncio.sleep(0.01)
+
+        self.assertAlmostEqual(
+            self.elevator.estimate_arrival_time(3, Direction.DOWN),
+            sum((
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+            )),
+            delta=0.1,
+        )
+
+        await asyncio.sleep(self.elevator.floor_travel_duration)
+        self.assertEqual(self.elevator.state, ElevatorState.OPENING_DOOR)
+        self.assertEqual(self.elevator.current_floor, 4)
+
+        self.assertAlmostEqual(
+            self.elevator.estimate_arrival_time(3, Direction.UP),
+            sum((
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,
+                self.elevator.door_move_duration,
+            )),
+            delta=0.1,
+        )
 
 
 if __name__ == "__main__":

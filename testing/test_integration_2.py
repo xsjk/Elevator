@@ -12,7 +12,7 @@ class ElevatorTest(GUIAsyncioTestCase):
         self.assertIn("call_down@2", self.controller.message_tasks)
 
         # Step 2: wait elevator arrives, then simulate open door just before it closes
-        travel_time = self.controller.calculate_duration(n_floors=1, n_stops=0)
+        travel_time = self.elevator1.calculate_duration(n_floors=1, n_stops=0)
         await asyncio.sleep(travel_time + self.controller.config.door_stay_duration + self.controller.config.door_move_duration + 0.1)
 
         self.assertEqual(self.elevator1.current_floor, 2)
@@ -38,7 +38,7 @@ class ElevatorTest(GUIAsyncioTestCase):
         await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration)
 
         # Step 4: wait elevator reaches -1, then press up button on floor 2
-        travel = self.controller.calculate_duration(n_floors=2, n_stops=0)
+        travel = self.elevator1.calculate_duration(n_floors=2, n_stops=0)
         await asyncio.sleep(travel)
 
         self.assertEqual(self.elevator1.current_floor, Floor("-1"))

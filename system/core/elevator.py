@@ -1,6 +1,7 @@
 import asyncio
 import bisect
 import inspect
+import logging
 from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
@@ -362,7 +363,8 @@ class Elevator:
 
         directed_floor = FloorAction(floor, requested_direction)
         if directed_floor in self.target_floor_chains:
-            raise ValueError(f"Floor {floor} already in the action chain with direction {requested_direction.name}")
+            logger.debug(f"Elevator {self.id}: Floor {floor} with direction {requested_direction.name} already in the action chain")
+            return self.events[directed_floor]
 
         assert isinstance(requested_direction, Direction)
 
@@ -490,20 +492,47 @@ class Elevator:
         Returns:
             float: Estimated time in seconds until the door is fully closed.
         """
-        duration: float = self.door_move_duration + self.door_stay_duration
+        duration: float = self.door_move_duration
         if self._door_last_state_change_time is None:
+            assert self.state == ElevatorState.STOPPED_DOOR_CLOSED
             return duration
-        passed = self.event_loop.time() - self._door_last_state_change_time
 
+        passed = self.event_loop.time() - self._door_last_state_change_time
         match self.state:
             case ElevatorState.OPENING_DOOR:
-                duration = self.door_move_duration - passed + self.door_stay_duration
+                duration = self.door_move_duration - passed
             case ElevatorState.STOPPED_DOOR_OPENED:
-                duration = self.door_stay_duration - passed
+                duration = 0
             case ElevatorState.CLOSING_DOOR:
                 duration = passed + self.door_stay_duration
+            case _:
+                raise ValueError(f"Invalid elevator state {self.state.name} for estimating door open time")
         if duration < 0:
             duration = 0.0
+        return duration
+
+    def calculate_duration(self, n_floors: float, n_stops: int) -> float:
+        return n_floors * self.floor_travel_duration + n_stops * (self.door_move_duration * 2 + self.door_stay_duration)
+
+    def estimate_arrival_time(self, target_floor: FloorLike, requested_direction: Direction) -> float:
+        target_floor = Floor(target_floor)
+        old_level = logger.level
+        logger.setLevel(logging.CRITICAL)
+        elevator = self.copy()
+        elevator.commit_floor(target_floor, requested_direction)
+
+        if elevator.state.is_moving():
+            duration = elevator.door_move_duration
+        elif target_floor == elevator.current_floor and elevator.committed_direction in (requested_direction, Direction.IDLE):
+            logger.setLevel(old_level)
+            return elevator.estimate_door_open_time()
+        else:
+            duration = elevator.estimate_door_close_time() + elevator.door_move_duration
+
+        n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
+        duration += self.calculate_duration(n_floors, n_stops)
+        logger.setLevel(old_level)
+        logger.debug(f"Controller: Estimation details - Elevator ID: {elevator.id}, Target Floor: {target_floor}, Requested Direction: {requested_direction.name}, Number of Floors: {n_floors}, Number of Stops: {n_stops}, Estimated Duration: {duration:.2f} seconds")
         return duration
 
     def pop_target(self) -> FloorAction:

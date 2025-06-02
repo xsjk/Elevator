@@ -217,30 +217,6 @@ class Controller:
         while True:
             yield await self.get_event_message()
 
-    def calculate_duration(self, n_floors: float, n_stops: int) -> float:
-        return n_floors * self.config.floor_travel_duration + n_stops * (self.config.door_move_duration * 2 + self.config.door_stay_duration)
-
-    def estimate_arrival_time(self, elevator: Elevator, target_floor: FloorLike, requested_direction: Direction) -> float:
-        target_floor = Floor(target_floor)
-        old_level = logger.level
-        logger.setLevel(logging.CRITICAL)
-        elevator = elevator.copy()
-        elevator.commit_floor(target_floor, requested_direction)
-
-        if elevator.state.is_moving():
-            duration = elevator.door_move_duration + elevator.door_stay_duration
-        elif target_floor == elevator.current_floor and elevator.committed_direction in (requested_direction, Direction.IDLE):
-            logger.setLevel(old_level)
-            return elevator.estimate_door_open_time()
-        else:
-            duration = elevator.estimate_door_close_time() + elevator.door_move_duration + elevator.door_stay_duration
-
-        n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
-        duration += self.calculate_duration(n_floors, n_stops)
-        logger.setLevel(old_level)
-        logger.debug(f"Controller: Estimation details - Elevator ID: {elevator.id}, Target Floor: {target_floor}, Requested Direction: {requested_direction.name}, Number of Floors: {n_floors}, Number of Stops: {n_stops}, Estimated Duration: {duration:.2f} seconds")
-        return duration
-
     async def call_elevator(self, call_floor: FloorLike, call_direction: Direction):
         call_floor = Floor(call_floor)
         assert call_direction in (Direction.UP, Direction.DOWN)
@@ -258,7 +234,7 @@ class Controller:
             logger.warning(f"Controller: No enabled elevators available for call at Floor {call_floor} going {call_direction.name.lower()}")
             return
 
-        elevator = min(enabled_elevators, key=lambda e: self.estimate_arrival_time(e, call_floor, call_direction))
+        elevator = min(enabled_elevators, key=lambda e: e.estimate_arrival_time(call_floor, call_direction))
         logger.info(f"Controller: Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
         directed_target_floor = FloorAction(call_floor, call_direction)
 
