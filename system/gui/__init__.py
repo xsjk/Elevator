@@ -3,7 +3,6 @@ import sys
 from typing import Coroutine
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QCoreApplication
 from qasync import QEventLoop
 
 from . import main_window
@@ -12,7 +11,7 @@ from .i18n import TranslationManager
 from .main_window import MainWindow
 
 
-def setup() -> tuple[QEventLoop, QCoreApplication]:
+def setup() -> QEventLoop:
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
@@ -23,17 +22,17 @@ def setup() -> tuple[QEventLoop, QCoreApplication]:
         main_window.tm = tm
 
     event_loop = QEventLoop(app)
-    return event_loop, app
+    return event_loop
 
 
 def run(coro: Coroutine):
-    loop, app = setup()
-    close_event = asyncio.Event()
-    app.aboutToQuit.connect(close_event.set)
-
-    with loop:
-        loop.create_task(coro, name="MainCoroutine")
-        loop.run_until_complete(close_event.wait())
+    runner = asyncio.Runner(loop_factory=setup)
+    try:
+        runner.run(coro)
+    except RuntimeError as e:
+        # Ignore error that occurs when app is closed
+        if "Event loop stopped before Future completed" not in str(e):
+            raise e
 
 
 __all__ = [

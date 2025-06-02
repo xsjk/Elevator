@@ -14,11 +14,7 @@ logger.setLevel("CRITICAL")  # Suppress logging during tests
 
 
 class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
-    @staticmethod
-    def loop_factory():
-        loop, _ = gui.setup()
-        assert not loop.is_closed()
-        return loop
+    loop_factory = staticmethod(gui.setup)
 
     async def asyncSetUp(self):
         self.controller = GUIController()
