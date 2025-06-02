@@ -12,7 +12,7 @@ from .utils.zmq_async import Client
 async def main(controller: Controller):
     async def input_loop():
         async for msg, _ in client.messages():
-            await controller.handle_message(msg)
+            controller.handle_message_task(msg)
 
     async def output_loop():
         async for msg in controller.messages():

@@ -79,6 +79,9 @@ class TranslationManager:
 
         self.set_language(self.default_language)
 
+    def get_current_language(self):
+        return self.current_language if self.current_language else self.default_language
+
     def set_language(self, language):
         """Set the application language"""
         if language not in self.available_languages:

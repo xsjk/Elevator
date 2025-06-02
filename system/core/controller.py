@@ -106,6 +106,7 @@ class Controller:
         # Empty the queue
         while not self.queue.empty():
             self.queue.get_nowait()
+        self.queue.put_nowait("reset")
 
         # Reset elevators
         self.__post_init__()
@@ -151,7 +152,9 @@ class Controller:
         self._started = False
 
     def handle_message_task(self, message: str) -> asyncio.Task:
-        assert message not in self.message_tasks, f"Controller: Message task for '{message}' already exists"
+        if message in self.message_tasks:
+            logger.debug(f"Controller: Message task for '{message}' already exists, reusing it")
+            return self.message_tasks[message]
 
         logger.debug(f"Controller: Existing tasks: {list(self.message_tasks)}")
 

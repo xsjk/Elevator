@@ -383,7 +383,10 @@ class Elevator:
                 e = asyncio.Event()
 
                 async def open_door():
-                    await self.commit_door(DoorDirection.OPEN)
+                    try:
+                        await self.commit_door(DoorDirection.OPEN)
+                    except asyncio.CancelledError:
+                        pass
                     e.set()
 
                 asyncio.create_task(open_door(), name=f"open_door_elevator_{self.id}_floor_{floor} {__file__}:{inspect.stack()[0].lineno}")
@@ -489,7 +492,7 @@ class Elevator:
         """
         duration: float = self.door_move_duration + self.door_stay_duration
         if self._door_last_state_change_time is None:
-            return self.door_move_duration + self.door_stay_duration
+            return duration
         passed = self.event_loop.time() - self._door_last_state_change_time
 
         match self.state:

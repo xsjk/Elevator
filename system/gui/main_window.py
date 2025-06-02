@@ -316,8 +316,9 @@ class MainWindow(QMainWindow):
         self.language_label.setProperty("class", "control-label")
         self.language_selector = QComboBox()
         self.language_selector.addItems(translation_manager.available_languages)
-        idx = self.language_selector.findText(translation_manager.current_language)
-        assert idx != -1, f"Current language '{translation_manager.current_language}' not found in available languages"
+        language = translation_manager.get_current_language()
+        idx = self.language_selector.findText(language)
+        assert idx != -1, f"Current language '{language}' not found in available languages"
         self.language_selector.setCurrentIndex(idx)
         self.language_selector.currentTextChanged.connect(self.change_language)
         self.language_selector.setProperty("class", "control-combobox")
