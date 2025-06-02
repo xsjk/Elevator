@@ -34,11 +34,11 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
 
         # simulate elevator arrives at passenger start floor
         arrival_msg = f"{passenger.matching_signal}#7"
-        done = await passenger.handle_message(arrival_msg)
+        done = passenger.handle_message(arrival_msg)
         self.assertFalse(done)
 
         # simulate door opens at elevator
-        done = await passenger.handle_message("door_opened#7")
+        done = passenger.handle_message("door_opened#7")
         self.assertFalse(done)
         # passenger should have requested target floor
         select_msg = await queue.get()
@@ -46,11 +46,11 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
 
         # simulate elevator arrives at target floor
         arrival_target = "floor_arrived@5#7"
-        done = await passenger.handle_message(arrival_target)
+        done = passenger.handle_message(arrival_target)
         self.assertFalse(done)
 
         # simulate door open at target floor
-        done = await passenger.handle_message("door_opened#7")
+        done = passenger.handle_message("door_opened#7")
         self.assertTrue(done)
 
     async def test_downward_travel(self):
@@ -64,19 +64,19 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
         await queue.get()  # Consume initial call
 
         # Elevator arrives
-        await passenger.handle_message("down_floor_arrived@5#3")
+        passenger.handle_message("down_floor_arrived@5#3")
         # Door opens, passenger enters
-        await passenger.handle_message("door_opened#3")
+        passenger.handle_message("door_opened#3")
         # Check if passenger requested floor
         request = await queue.get()
         self.assertEqual(request, "select_floor@2#3")
 
         # Arrival at target floor
-        await passenger.handle_message("floor_arrived@2#3")
+        passenger.handle_message("floor_arrived@2#3")
         self.assertEqual(passenger.state, PassengerState.IN_ELEVATOR_AT_TARGET_FLOOR)
 
         # Door opens at target, passenger exits
-        done = await passenger.handle_message("door_opened#3")
+        done = passenger.handle_message("door_opened#3")
         self.assertTrue(done)
         self.assertEqual(passenger.state, PassengerState.OUT_ELEVATOR_AT_TARGET_FLOOR)
 
@@ -96,15 +96,15 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
         await queue.get()  # Consume initial call
 
         # Wrong direction elevator
-        await passenger.handle_message("down_floor_arrived@2#5")
+        passenger.handle_message("down_floor_arrived@2#5")
         self.assertEqual(passenger._elevator_code, -1)  # Should not assign elevator
 
         # Right direction but wrong floor
-        await passenger.handle_message("up_floor_arrived@3#6")
+        passenger.handle_message("up_floor_arrived@3#6")
         self.assertEqual(passenger._elevator_code, -1)
 
         # Correct elevator arrives
-        await passenger.handle_message("up_floor_arrived@2#7")
+        passenger.handle_message("up_floor_arrived@2#7")
         self.assertEqual(passenger._elevator_code, 7)
 
     async def test_multiple_state_transitions(self):
@@ -117,26 +117,26 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(passenger.state, PassengerState.OUT_ELEVATOR_AT_OTHER_FLOOR)
 
         # Elevator arrives
-        await passenger.handle_message("up_floor_arrived@1#2")
+        passenger.handle_message("up_floor_arrived@1#2")
         self.assertEqual(passenger._elevator_code, 2)
 
         # Door opens, passenger enters
-        await passenger.handle_message("door_opened#2")
+        passenger.handle_message("door_opened#2")
         self.assertEqual(passenger.state, PassengerState.IN_ELEVATOR_AT_OTHER_FLOOR)
         await queue.get()  # Consume floor request
 
         # Test floor arrival at non-target floor
-        await passenger.handle_message("floor_arrived@2#2")
+        passenger.handle_message("floor_arrived@2#2")
         self.assertEqual(passenger.state, PassengerState.IN_ELEVATOR_AT_OTHER_FLOOR)
         self.assertEqual(passenger.current_floor, 1)  # Floor shouldn't change
 
         # Arrival at target floor
-        await passenger.handle_message("floor_arrived@3#2")
+        passenger.handle_message("floor_arrived@3#2")
         self.assertEqual(passenger.state, PassengerState.IN_ELEVATOR_AT_TARGET_FLOOR)
         self.assertEqual(passenger.current_floor, 3)
 
         # Door opens at target, passenger exits
-        await passenger.handle_message("door_opened#2")
+        passenger.handle_message("door_opened#2")
         self.assertEqual(passenger.state, PassengerState.OUT_ELEVATOR_AT_TARGET_FLOOR)
         self.assertTrue(passenger.finished)
 
@@ -147,15 +147,15 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
         await queue.get()  # Consume initial call
 
         # Elevator arrives
-        await passenger.handle_message("up_floor_arrived@1#3")
+        passenger.handle_message("up_floor_arrived@1#3")
         self.assertEqual(passenger._elevator_code, 3)
 
         # Wrong elevator door opens
-        await passenger.handle_message("door_opened#4")
+        passenger.handle_message("door_opened#4")
         self.assertEqual(passenger.state, PassengerState.OUT_ELEVATOR_AT_OTHER_FLOOR)
 
         # Correct elevator door opens
-        await passenger.handle_message("door_opened#3")
+        passenger.handle_message("door_opened#3")
         self.assertEqual(passenger.state, PassengerState.IN_ELEVATOR_AT_OTHER_FLOOR)
 
 

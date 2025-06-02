@@ -36,7 +36,7 @@ class Passenger:
     def __hash__(self) -> int:
         return hash((self.start_floor, self.target_floor, self.name))
 
-    async def handle_message(self, message: str) -> bool:
+    def handle_message(self, message: str) -> bool:
         # Process elevator messages based on passenger state
         match self.state:
             case PassengerState.IN_ELEVATOR_AT_OTHER_FLOOR:
@@ -56,7 +56,6 @@ class Passenger:
                     self._elevator_code = int(message.split("#")[-1])
                 elif message == f"door_opened#{self._elevator_code}" and self._elevator_code > 0:
                     # Enter elevator
-                    await asyncio.sleep(0.1)
                     self.state = PassengerState.IN_ELEVATOR_AT_OTHER_FLOOR
                     # Request target floor
                     self.queue.put_nowait(f"select_floor@{self.target_floor}#{self._elevator_code}")

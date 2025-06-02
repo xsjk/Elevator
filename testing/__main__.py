@@ -77,7 +77,7 @@ async def testing(
 
         # Process message for each active passenger
         for passenger in list(active):
-            if await passenger.handle_message(message):
+            if passenger.handle_message(message):
                 completed += 1
                 active.remove(passenger)
 
