@@ -8,9 +8,12 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from system import gui
 from system.core.controller import Controller
-from system.core.elevator import Elevator, TargetFloors, TargetFloorChains, logger
+from system.core.elevator import Elevator, TargetFloorChains, TargetFloors, logger
+from system.gui import main_window
 from system.gui.gui_controller import GUIController
 from system.gui.main_window import ElevatorPanel
+from system.gui.theme_manager import ThemeManager
+from system.gui.visualizer import ElevatorVisualizer
 from system.utils.common import Direction, DoorDirection, DoorState, ElevatorId, ElevatorState, Event, Floor, FloorAction, FloorLike
 from system.utils.zmq_async import Client, Server
 
@@ -54,12 +57,19 @@ async def message_sender(server: Server, client_addr: str, queue: asyncio.Queue)
 
 __all__ = [
     "GUIAsyncioTestCase",
+    # Core
     "Controller",
     "Elevator",
     "TargetFloors",
     "TargetFloorChains",
     "logger",
+    # GUI
+    "main_window",
     "GUIController",
+    "ElevatorPanel",
+    "ThemeManager",
+    "ElevatorVisualizer",
+    # Utils
     "Direction",
     "DoorDirection",
     "DoorState",

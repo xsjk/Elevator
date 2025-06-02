@@ -1,20 +1,17 @@
-import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+from .common import Direction, ElevatorVisualizer, Floor, ThemeManager, main_window
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from system.gui.visualizer import ElevatorVisualizer
-from system.utils.common import Direction, Floor
 
 
 class TestElevatorVisualizer(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication(sys.argv)
+        main_window.theme_manager = ThemeManager(cls.app)
 
     def setUp(self):
         self.floors = [Floor(-1), Floor(1), Floor(2), Floor(3)]
@@ -33,34 +30,24 @@ class TestElevatorVisualizer(unittest.TestCase):
         self.assertEqual(len(self.visualizer.elevator_status), 1)
         self.assertNotIn(2, self.visualizer.elevator_status)
 
-    # TestCase 1
     def test_update_theme_colors_dark_mode(self):
-        # Patch palette and QColor.lightness() to simulate dark mode
-        with patch.object(self.visualizer, "palette") as mock_palette:
-            dark_color = MagicMock(spec=QColor)
-            dark_color.lightness.return_value = 50  # simulate dark mode
-            mock_palette.return_value.color.return_value = dark_color
-
+        # Test dark theme colors
+        with patch.object(main_window.theme_manager, "get_current_theme", return_value="dark"):
             self.visualizer._update_theme_colors()
 
-            # Check that up_color is bright green (dark mode expected)
+            # Verify dark theme colors
             self.assertEqual(self.visualizer.up_color, QColor(0, 255, 100))
             self.assertEqual(self.visualizer.down_color, QColor(255, 100, 100))
             self.assertEqual(self.visualizer.idle_color, QColor(150, 150, 150))
             self.assertEqual(self.visualizer.door_color, QColor(220, 220, 220))
             self.assertEqual(self.visualizer.door_open_color, QColor(80, 80, 80))
 
-    # TestCase 2
     def test_update_theme_colors_light_mode(self):
-        # Patch palette and QColor.lightness() to simulate light mode
-        with patch.object(self.visualizer, "palette") as mock_palette:
-            light_color = MagicMock(spec=QColor)
-            light_color.lightness.return_value = 200  # simulate light mode
-            mock_palette.return_value.color.return_value = light_color
-
+        # Test light theme colors
+        with patch.object(main_window.theme_manager, "get_current_theme", return_value="light"):
             self.visualizer._update_theme_colors()
 
-            # Check that up_color is standard green (light mode expected)
+            # Verify light theme colors
             self.assertEqual(self.visualizer.up_color, QColor(0, 200, 0))
             self.assertEqual(self.visualizer.down_color, QColor(200, 0, 0))
             self.assertEqual(self.visualizer.idle_color, QColor(100, 100, 100))
@@ -75,20 +62,19 @@ class TestElevatorVisualizer(unittest.TestCase):
         from PySide6.QtCore import QEvent
 
         event = QEvent(QEvent.Type.PaletteChange)
-        self.visualizer.changeEvent(event)  # 仅测试是否正常调用
+        self.visualizer.changeEvent(event)  # only to ensure no exceptions are raised
 
     def test_calculate_floor_positions(self):
-        # 设置控件尺寸以确保 height 可用
-        self.visualizer.resize(200, 400)  # 宽度无关紧要，关键是高度
+        self.visualizer.resize(200, 400)  # width is not used, height is important
         self.visualizer._calculate_floor_positions()
 
         floor_positions = self.visualizer.floor_positions
         expected_floors = sorted(self.floors, reverse=True)
 
-        # 检查所有楼层都在 floor_positions 中
+        # Check if all floors have positions
         self.assertEqual(set(floor_positions.keys()), set(self.floors))
 
-        # 检查楼层越高，位置越靠上（Y 值越小）
+        # Check if higher floors have smaller Y positions
         for i in range(len(expected_floors) - 1):
             upper = expected_floors[i]
             lower = expected_floors[i + 1]
