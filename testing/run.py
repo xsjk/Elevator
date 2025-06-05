@@ -267,4 +267,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.Runner().run(main())
+    try:
+        asyncio.Runner().run(main())
+    except KeyboardInterrupt:
+        pass

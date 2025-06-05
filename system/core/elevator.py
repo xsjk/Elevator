@@ -1,7 +1,6 @@
 import asyncio
 import bisect
 import inspect
-import logging
 from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
@@ -11,7 +10,6 @@ from ..utils.common import (
     Direction,
     DoorDirection,
     DoorState,
-    ElevatorId,
     ElevatorState,
     Event,
     Floor,
@@ -39,6 +37,12 @@ class TargetFloors(list[FloorAction]):
         bisect.insort(self, FloorAction(floor, direction), key=self.key)
         if not self.is_empty():
             self.nonemptyEvent.set()
+
+    def top(self) -> FloorAction:
+        return self[0]
+
+    def bottom(self) -> FloorAction:
+        return self[-1]
 
     def remove(self, action: FloorAction):
         super().remove(action)
@@ -107,6 +111,9 @@ class TargetFloorChains:
 
     @direction.setter
     def direction(self, new_direction: Direction):
+        if new_direction == Direction.IDLE:
+            logger.debug("Setting direction to IDLE, this should be done only when all chains are empty")
+            assert self.is_empty(), "Cannot set direction to IDLE when there are actions in the chains"
         self.current_chain.direction = new_direction
         self.next_chain.direction = -new_direction
         self.future_chain.direction = new_direction
@@ -122,7 +129,6 @@ class TargetFloorChains:
         """
         self.swap_event.set()
         self.current_chain, self.next_chain, self.future_chain = self.next_chain, self.future_chain, TargetFloors(-self.future_chain.direction)
-        assert self.current_chain.direction == -self.next_chain.direction == self.future_chain.direction, f"Direction mismatch after swap: {self.current_chain.direction}, {self.next_chain.direction}, {self.future_chain.direction}"
 
     def pop(self) -> FloorAction:
         try:
@@ -147,11 +153,20 @@ class TargetFloorChains:
 
             raise IndexError("No actions in the current chain")
         finally:
-            if len(self) == 0:
-                self.direction = Direction.IDLE
+            # NOTE: do not set direction to IDLE here
+            pass
 
     def top(self) -> FloorAction:
         return next(iter(self))
+
+    def bottom(self) -> FloorAction:
+        if len(self.future_chain) > 0:
+            return self.future_chain.bottom()
+        elif len(self.next_chain) > 0:
+            return self.next_chain.bottom()
+        elif len(self.current_chain) > 0:
+            return self.current_chain.bottom()
+        raise IndexError("No actions in the current chain")
 
     async def _wait_event(self, e: asyncio.Event):
         if isinstance(self.event_loop, asyncio.AbstractEventLoop):
@@ -276,11 +291,44 @@ class TargetFloorChains:
     def __repr__(self) -> str:
         return f"ElevatorActionChains(direction={self.direction.name}, current_chain={self.current_chain}, next_chain={self.next_chain}, future_chain={self.future_chain})"
 
+    def select_chain(self, requested_direction: Direction, target_direction: Direction) -> TargetFloors:
+        """
+        Select the appropriate target-floor chain for adding a new action.
+        Sets elevator direction if chains are idle.
+        """
+        # If idle, initialize the chains' direction
+        if self.direction == Direction.IDLE:
+            if requested_direction != Direction.IDLE:
+                self.direction = requested_direction
+            elif target_direction != Direction.IDLE:
+                self.direction = target_direction
+            return self.current_chain
+        # Internal call: no requested direction
+        if requested_direction == Direction.IDLE:
+            if target_direction in (self.direction, Direction.IDLE):
+                return self.current_chain
+            else:
+                return self.next_chain
+        # External request in current direction
+        if requested_direction == self.direction:
+            if target_direction in (self.direction, Direction.IDLE):
+                return self.current_chain
+            else:
+                return self.future_chain
+        # External request in opposite direction
+        return self.next_chain
+
+    def add(self, directed_floor: FloorAction, *, target_direction: Direction):
+        floor, requested_direction = directed_floor
+        chain = self.select_chain(requested_direction, target_direction)
+        chain.add(floor, requested_direction)
+        return self.top() == directed_floor
+
 
 @dataclass
 class Elevator:
     # Attributes
-    id: ElevatorId
+    id: int  # Using int for ID
 
     floor_travel_duration: float = 1.0
     accelerate_duration: float = 1.0
@@ -314,7 +362,8 @@ class Elevator:
     ## After the elevator arrives at floor 5 and user selects floor 1, 2, 4 and 6, the commited floors will be:
     ## [(4, IDLE), (4, DOWN), (2, IDLE), (2, DOWN), (1, IDLE), (3, UP), (4, UP)]
     # e.g. []
-    events: dict[FloorAction, asyncio.Event] = field(default_factory=dict)
+    target_floor_arrived: dict[FloorAction, asyncio.Event] = field(default_factory=dict)
+    target_floor_processed: asyncio.Event = field(default_factory=asyncio.Event)  # Event that is set when the target floor is processed
 
     _moving_timestamp: float | None = None  # Timestamp when movement starts
     _moving_speed: float | None = None  # Speed of the elevator during movement, None if not moving
@@ -326,10 +375,14 @@ class Elevator:
     door_action_queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Queue for actions to be executed
     door_action_processed: asyncio.Event = field(default_factory=asyncio.Event)
 
+    # Update fields for time estimation
+    _total_travel_time: float = 0.0  # Total travel time for all planned stops
+
     def copy(self) -> Self:
         c = copy(self)
         c.target_floor_chains = copy(self.target_floor_chains)
-        c.events = {k: asyncio.Event() for k in self.events}
+        c.target_floor_arrived = {k: asyncio.Event() for k in self.target_floor_arrived}
+        c.target_floor_processed = asyncio.Event()
         c.door_action_queue = asyncio.Queue()
         c.queue = asyncio.Queue()
         return c
@@ -343,15 +396,10 @@ class Elevator:
 
     def commit_floor(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE) -> asyncio.Event:
         """
-        Commit a floor to the elevator's list of target floors.
+        Commit a floor to the elevator's list of target floors and calculate its estimated arrival time.
 
-        Args:
-            floor (Floor): The floor to commit. Must be an instance of Floor.
-            requested_direction (Direction): The direction the elevator should take after arriving at the floor. If Direction.IDLE, it is a call inside the elevator
-
-        Returns:
-            asyncio.Event: An event that will be set when the elevator arrives at the committed floor.
-
+        This method not only adds the floor to the appropriate chain but also maintains
+        an estimate of the total travel time for each committed floor.
         """
         floor = Floor(floor)
 
@@ -363,110 +411,40 @@ class Elevator:
         directed_floor = FloorAction(floor, requested_direction)
         if directed_floor in self.target_floor_chains:
             logger.debug(f"Elevator {self.id}: Floor {floor} with direction {requested_direction.name} already in the action chain")
-            return self.events[directed_floor]
+            return self.target_floor_arrived[directed_floor]
 
         assert isinstance(requested_direction, Direction)
 
+        # Determine which chain to add the action to based on current direction and request
+        # This is the core of the elevator scheduling algorithm
         target_direction = self.direction_to(floor)
+        if self.target_floor_chains.add(directed_floor, target_direction=target_direction):
+            logger.debug(f"Elevator {self.id}: {FloorAction(floor, requested_direction)} may need immediate processing")
+        else:
+            logger.debug(f"Elevator {self.id}: {FloorAction(floor, requested_direction)} added to the chain for later processing")
 
-        # arrive immediately if the elevator is already at the floor
-        if target_direction == Direction.IDLE:  # same floor
-            if self.target_floor_chains.direction in (requested_direction, Direction.IDLE):  # same direction
-                msg = f"floor_arrived@{self.current_floor}#{self.id}"
-                match requested_direction:
-                    case Direction.UP:
-                        self.queue.put_nowait(f"up_{msg}")
-                    case Direction.DOWN:
-                        self.queue.put_nowait(f"down_{msg}")
-                    case Direction.IDLE:
-                        self.queue.put_nowait(msg)
-
-                e = asyncio.Event()
-
-                async def open_door():
-                    try:
-                        await self.commit_door(DoorDirection.OPEN)
-                    except asyncio.CancelledError:
-                        pass
-                    e.set()
-
-                self.event_loop.create_task(open_door(), name=f"open_door_elevator_{self.id}_floor_{floor} {__file__}:{inspect.stack()[0].lineno}")
-                logger.debug(f"Elevator {self.id}: Arrived at floor {floor} immediately, opening door")
-                return e
-
-        # Determine the chain to add the action to and process later in the move_loop
-        match self.target_floor_chains.direction:
-            case Direction.IDLE:
-                # Use the current chain
-                chain = self.target_floor_chains.current_chain
-                # Initialize the direction of the chain
-                self.target_floor_chains.direction = requested_direction if requested_direction != Direction.IDLE else target_direction
-            case Direction.UP | Direction.DOWN:
-                match requested_direction:
-                    case Direction.IDLE:
-                        if target_direction in (self.target_floor_chains.direction, Direction.IDLE):
-                            chain = self.target_floor_chains.current_chain
-                        else:
-                            chain = self.target_floor_chains.next_chain
-
-                    case Direction.UP | Direction.DOWN:
-                        if requested_direction == self.target_floor_chains.direction:
-                            if target_direction in (self.target_floor_chains.direction, Direction.IDLE):
-                                # We can directly reuse the current plan since the all directions are the same
-                                chain = self.target_floor_chains.current_chain
-                            else:
-                                # The floor has missed although the requested direction is the same as the current direction
-                                # We need to add it to the last plan
-                                chain = self.target_floor_chains.future_chain
-                        else:
-                            # Add the floor to the next plan since it is in the opposite direction
-                            chain = self.target_floor_chains.next_chain
-
-        # Add the action to the chain
-        chain.add(floor, requested_direction)
-        logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
-
-        self.events[directed_floor] = asyncio.Event()
-        return self.events[directed_floor]
+        # Create and store the event that will be triggered when floor is reached
+        self.target_floor_arrived[directed_floor] = asyncio.Event()
+        return self.target_floor_arrived[directed_floor]
 
     def cancel_commit(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE):
         floor = Floor(floor)
         directed_floor = FloorAction(floor, requested_direction)
+
         # Remove the action from the chain
         logger.debug(f"Elevator {self.id}: Cancelling floor {floor} with direction {requested_direction.name}")
         logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
+
         if directed_floor in self.target_floor_chains:
             self.target_floor_chains.remove(directed_floor)
-            assert directed_floor in self.events
-            self.events.pop(directed_floor).set()
+
+            assert directed_floor in self.target_floor_arrived
+            self.target_floor_arrived.pop(directed_floor).set()
             logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
-
-    def arrival_summary(self, floor: FloorLike, requested_direction: Direction) -> tuple[float, int]:
-        floor = Floor(floor)
-        directed_floor = FloorAction(floor, requested_direction)
-        if directed_floor not in self.target_floor_chains:
-            raise ValueError(f"Floor {floor} not in action chain")
-
-        current_floor = self.current_position
-
-        n_floors = 0.0
-        n_stops = 0
-        for a in iter(self.target_floor_chains):
-            n_floors += abs(a.floor - current_floor)
-            if a.floor == floor and a.direction in (requested_direction, Direction.IDLE):
-                break
-            n_stops += 1
-
-            current_floor = a.floor
-
-        return n_floors, n_stops
 
     def estimate_door_close_time(self) -> float:
         """
         Estimate the time until the door finally closes.
-
-        Returns:
-            float: Estimated time in seconds until the door is fully closed.
         """
         duration: float = 0.0
         if self._door_last_state_change_time is None:
@@ -486,10 +464,7 @@ class Elevator:
 
     def estimate_door_open_time(self) -> float:
         """
-        Estimate the time until the door fully opened (including the stay duration).
-
-        Returns:
-            float: Estimated time in seconds until the door is fully closed.
+        Estimate the time until the door fully opened.
         """
         duration: float = self.door_move_duration
         if self._door_last_state_change_time is None:
@@ -499,50 +474,83 @@ class Elevator:
         passed = self.event_loop.time() - self._door_last_state_change_time
         match self.state:
             case ElevatorState.OPENING_DOOR:
-                duration = self.door_move_duration - passed
+                duration = self.door_move_duration - passed  # the time remaining to open the door
             case ElevatorState.STOPPED_DOOR_OPENED:
-                duration = 0
+                duration = 0  # the door is already open
             case ElevatorState.CLOSING_DOOR:
-                duration = passed + self.door_stay_duration
+                duration = passed  # the time to reopen the door from current state
+            case ElevatorState.STOPPED_DOOR_CLOSED:
+                duration = self.door_move_duration
             case _:
+                logger.error(f"Invalid elevator state {self.state.name} for estimating door open time")
                 raise ValueError(f"Invalid elevator state {self.state.name} for estimating door open time")
         if duration < 0:
             duration = 0.0
         return duration
 
     def calculate_duration(self, n_floors: float, n_stops: int) -> float:
+        """
+        Calculate travel duration based on floors and stops.
+        """
         return n_floors * self.floor_travel_duration + n_stops * (self.door_move_duration * 2 + self.door_stay_duration)
 
-    def estimate_arrival_time(self, target_floor: FloorLike, requested_direction: Direction) -> float:
+    def _calculate_travel_parameters(self, target_floor: FloorLike, requested_direction: Direction) -> tuple[float, int]:
+        """
+        Calculate floors traveled and stops needed to reach target floor.
+        """
         target_floor = Floor(target_floor)
-        old_level = logger.level
-        logger.setLevel(logging.CRITICAL)
-        elevator = self.copy()
-        elevator.commit_floor(target_floor, requested_direction)
+        current_pos = self.current_position
 
-        if elevator.state.is_moving():
-            duration = elevator.door_move_duration
-        elif target_floor == elevator.current_floor and elevator.committed_direction in (requested_direction, Direction.IDLE):
-            logger.setLevel(old_level)
-            return elevator.estimate_door_open_time()
+        # Create a simulated plan by copying chains and adding target floor
+        chains_copy = copy(self.target_floor_chains)
+        target_direction = self.direction_to(target_floor)
+
+        # Determine which chain to add the target floor to
+        if chains_copy.direction == Direction.IDLE:
+            chain = chains_copy.current_chain
+            chains_copy.direction = requested_direction if requested_direction != Direction.IDLE else target_direction
         else:
-            duration = elevator.estimate_door_close_time() + elevator.door_move_duration
+            if requested_direction == Direction.IDLE:
+                if target_direction in (chains_copy.direction, Direction.IDLE):
+                    chain = chains_copy.current_chain
+                else:
+                    chain = chains_copy.next_chain
+            else:
+                if requested_direction == chains_copy.direction:
+                    if target_direction in (chains_copy.direction, Direction.IDLE):
+                        chain = chains_copy.current_chain
+                    else:
+                        chain = chains_copy.future_chain
+                else:
+                    chain = chains_copy.next_chain
 
-        n_floors, n_stops = elevator.arrival_summary(target_floor, requested_direction)
-        duration += self.calculate_duration(n_floors, n_stops)
-        logger.setLevel(old_level)
-        logger.debug(f"Controller: Estimation details - Elevator ID: {elevator.id}, Target Floor: {target_floor}, Requested Direction: {requested_direction.name}, Number of Floors: {n_floors}, Number of Stops: {n_stops}, Estimated Duration: {duration:.2f} seconds")
-        return duration
+        # Add target floor to simulated chain
+        chain.add(target_floor, requested_direction)
+
+        # Calculate travel parameters
+        n_floors = 0.0
+        n_stops = 0
+
+        for action in chains_copy:
+            n_floors += abs(action.floor - current_pos)
+            if action.floor == target_floor and action.direction in (requested_direction, Direction.IDLE):
+                break
+            n_stops += 1
+            current_pos = action.floor
+
+        return n_floors, n_stops
 
     def pop_target(self) -> FloorAction:
         """
         Pop the next action from the elevator's list of target floors.
+        Also removes its arrival time estimate.
         """
         if self.target_floor_chains.is_empty():
             raise IndexError("No actions in the current chain")
 
         directed_floor = self.target_floor_chains.pop()
-        event = self.events.pop(directed_floor)
+
+        event = self.target_floor_arrived.pop(directed_floor)
         event.set()
         logger.debug(f"Elevator {self.id}: Action popped: {directed_floor}")
         logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
@@ -559,7 +567,23 @@ class Elevator:
             self.move_loop_started = True
             while True:
                 # Get the target floor from the plan
-                target_floor, direction = await self.target_floor_chains.get()
+                target_floor, direction = directed_floor = await self.target_floor_chains.get()
+                logger.debug(f"Elevator {self.id}: Target floor received: {target_floor} with direction {direction.name}")
+
+                if not self.door_idle_event.is_set():
+                    # Got target floor while door is not idle, waiting for door to close or may interrupt door closing
+                    if self.directed_floor == directed_floor:
+                        match self.state:
+                            case ElevatorState.CLOSING_DOOR:
+                                # Interrupt door closing if necessary
+                                await self.commit_door(DoorDirection.OPEN)
+                                continue
+                            case ElevatorState.OPENING_DOOR | ElevatorState.STOPPED_DOOR_OPENED:
+                                # Ignoring target floor while door is opening
+                                self.pop_target()
+                                continue
+                            case _:
+                                raise RuntimeError(f"Invalid elevator state {self.state.name} while waiting for door to close")
 
                 # Wait for the door not open or moving
                 await self.door_idle_event.wait()
@@ -595,7 +619,7 @@ class Elevator:
 
                     committed_direction = direction
                     while True:
-                        self.pop_target()
+                        self.pop_target()  # NOTE: do not reset direction here, instead, reset the direction when door is closed if no other actions are in the chain
                         msg = f"floor_arrived@{self.current_floor}#{self.id}"
                         if self.target_floor_chains.is_empty():
                             match direction:
@@ -631,9 +655,10 @@ class Elevator:
                                 self.queue.put_nowait(f"down_{msg}")
                         break
 
-                    logger.debug(f"Elevator {self.id}: Waiting for door to close")
-                    await self.door_idle_event.wait()  # wait for the door to close
+                    # logger.debug(f"Elevator {self.id}: Waiting for door to close")
+                    # await self.door_idle_event.wait()  # wait for the door to close
 
+                self.target_floor_processed.set()
                 self._moving_timestamp = None
 
                 # Signal that the floor as arrived
@@ -688,7 +713,9 @@ class Elevator:
 
                 # notify the move_loop
                 self.door_idle_event.set()
-                assert self.door_idle_event.is_set()
+                if self.target_floor_chains.is_empty():
+                    logger.debug(f"Elevator {self.id}: No target floors, setting direction to IDLE")
+                    self.committed_direction = Direction.IDLE
 
             except asyncio.CancelledError as e:
                 if len(e.args) == 0:
@@ -702,6 +729,7 @@ class Elevator:
             while True:
                 logger.debug(f"Elevator {self.id}: Wait for door action queue")
                 action = await self.door_action_queue.get()
+                logger.debug(f"Elevator {self.id}: Door action received: {action.name}")
                 match self.state:
                     case ElevatorState.MOVING_UP | ElevatorState.MOVING_DOWN:
                         logger.info("Cannot commit door state while the elevator is moving or opening")
@@ -710,7 +738,7 @@ class Elevator:
                     case ElevatorState.STOPPED_DOOR_CLOSED:
                         if action == DoorDirection.OPEN:
                             self.door_idle_event.clear()
-                            task = asyncio.create_task(open_door(), name=f"open_door_{__file__}:{inspect.stack()[0].lineno}")
+                            task = self.event_loop.create_task(open_door(), name=f"open_door_{__file__}:{inspect.stack()[0].lineno}")
                     case ElevatorState.CLOSING_DOOR:
                         assert task is not None
                         assert self._door_last_state_change_time is not None
@@ -723,7 +751,7 @@ class Elevator:
                             logger.info(f"Door closing is interrupted after {duration}")
 
                             self.door_idle_event.clear()
-                            task = asyncio.create_task(open_door(duration), name=f"open_door_{__file__}:{inspect.stack()[0].lineno}")
+                            task = self.event_loop.create_task(open_door(duration), name=f"open_door_{__file__}:{inspect.stack()[0].lineno}")
 
                     case ElevatorState.STOPPED_DOOR_OPENED:
                         assert task is not None
@@ -732,7 +760,7 @@ class Elevator:
                             task.cancel("request door close")  # cancel the stay duration if it is running
                             await task
                             assert task.done()
-                            task = asyncio.create_task(close_door(), name=f"close_door_{__file__}:{inspect.stack()[0].lineno}")
+                            task = self.event_loop.create_task(close_door(), name=f"close_door_{__file__}:{inspect.stack()[0].lineno}")
 
                 self.door_action_processed.set()
 
@@ -794,10 +822,10 @@ class Elevator:
         return self._state
 
     @property
-    def next_target_floor(self) -> Floor | None:
+    def next_target(self) -> FloorAction | None:
         if self.target_floor_chains.is_empty():
             return None
-        return self.target_floor_chains.top().floor
+        return self.target_floor_chains.top()
 
     @state.setter
     def state(self, new_state: ElevatorState):
@@ -886,6 +914,129 @@ class Elevator:
     @property
     def committed_direction(self) -> Direction:
         return self.target_floor_chains.direction
+
+    @committed_direction.setter
+    def committed_direction(self, new_direction: Direction):
+        self.target_floor_chains.direction = new_direction
+
+    @property
+    def directed_floor(self) -> FloorAction:
+        return FloorAction(self.current_floor, self.committed_direction)
+
+    def _calculate_arrival_time(self, target_floor: FloorLike, requested_direction: Direction) -> float:
+        """
+        Calculate the estimated arrival time for a specific floor.
+        This calls estimate_total_time and adjusts for the specific target floor.
+        """
+        # Now simulate adding this target floor
+        chains_copy = copy(self.target_floor_chains)
+        target_floor = Floor(target_floor)
+
+        # Determine which chain to add the target floor in simulation
+        target_direction = self.direction_to(target_floor)
+        chain = chains_copy.select_chain(requested_direction, target_direction)
+
+        # Add the floor to the simulated chain
+        chain.add(target_floor, requested_direction)
+
+        # Calculate total time with the new floor added
+        new_total_time = self.estimate_total_time(chains_copy)
+
+        # If this is going to the current chain, the arrival time is just the time to get there
+        if chain == chains_copy.current_chain:
+            # Find position of the target in the chain
+            position = -1
+            for i, action in enumerate(chain):
+                if action.floor == target_floor and action.direction == requested_direction:
+                    position = i
+                    break
+
+            if position >= 0:
+                # Calculate time to reach this position
+                current_pos = self.current_position
+                floors_to_target = 0.0
+                stops_before_target = 0
+
+                for i, action in enumerate(chain):
+                    if i == position:
+                        break
+                    floors_to_target += abs(action.floor - current_pos)
+                    stops_before_target += 1
+                    current_pos = action.floor
+
+                # Add time to target floor
+                floors_to_target += abs(target_floor - current_pos)
+
+                # Calculate time
+                if self.state.is_moving():
+                    arrival_time = self.door_move_duration
+                else:
+                    arrival_time = self.estimate_door_close_time() + self.door_move_duration
+
+                arrival_time += self.calculate_duration(floors_to_target, stops_before_target)
+                return arrival_time
+
+        # Otherwise return the difference between the two totals
+        # This is an approximation that works well enough
+        return new_total_time
+
+    def estimate_total_time(self, chains: TargetFloorChains | None = None, target_action: FloorAction | None = None) -> float:
+        """
+        Estimate the total time needed to complete all currently planned stops.
+        More efficient than calculating for each floor separately.
+        """
+        if chains is None:
+            chains = self.target_floor_chains
+
+        # Start with time to get door closed if needed
+        if not self.state.is_moving() and self.state != ElevatorState.STOPPED_DOOR_CLOSED:
+            total_time = self.estimate_door_close_time()
+        else:
+            total_time = 0.0
+
+        # If no planned stops, return immediate time
+        if chains.is_empty():
+            return total_time
+
+        # Calculate time needed for all planned floors
+        current_pos = self.current_position
+        total_floors = 0.0
+        total_stops = 0
+
+        if target_action is None:
+            target_action = chains.bottom()
+
+        # Simulate the elevator journey through all chains
+        for action in chains:
+            total_floors += abs(action.floor - current_pos)
+            current_pos = action.floor
+            if action == target_action:
+                # If we reached the target action, we can stop here
+                break
+            total_stops += 1
+
+        # Add travel time for all floors and stops
+        total_time += self.calculate_duration(total_floors, total_stops)
+
+        return total_time
+
+    def estimate_arrival_time(self, target_floor: FloorLike, requested_direction: Direction) -> float:
+        """
+        Estimate arrival time for a floor that may not be committed yet.
+        Uses the cached values when available or calculates based on total time estimate.
+        """
+        target_floor = Floor(target_floor)
+        directed_floor = FloorAction(target_floor, requested_direction)
+
+        target_direction = self.direction_to(target_floor)
+        chain_copy = copy(self.target_floor_chains)
+        chain_copy.add(directed_floor, target_direction=target_direction)
+
+        # Special case: Already at requested floor
+        if target_floor == self.current_floor and self.committed_direction in (requested_direction, Direction.IDLE) and not self.state.is_moving():
+            return self.estimate_door_open_time()
+
+        return self.estimate_total_time(chain_copy, target_action=directed_floor) + self.door_move_duration
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from .common import ElevatorState, Floor, GUIAsyncioTestCase
+from common import ElevatorState, Floor, GUIAsyncioTestCase
 
 
 class ElevatorTest(GUIAsyncioTestCase):

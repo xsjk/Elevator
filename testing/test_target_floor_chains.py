@@ -23,7 +23,7 @@ class TestTargetFloorChains(unittest.TestCase):
         self.chains.direction = Direction.UP
         self.chains.next_chain.add(2, Direction.DOWN)
         result_1 = self.chains.pop()
-        self.assertEqual(self.chains.current_chain.direction, Direction.IDLE)
+        self.assertEqual(self.chains.current_chain.direction, Direction.DOWN)
         self.assertEqual(result_1, FloorAction(2, Direction.DOWN))
 
         # TestCase 3

@@ -62,11 +62,13 @@ class GUIController(Controller):
         try:
             while True:
                 await asyncio.sleep(0.02)
-
                 for eid, elevator in self.elevators.items():
                     self._update_elevator_status(v, eid, elevator)
 
                 v.update()
+        except RuntimeError as e:
+            if "no running event loop" in str(e):
+                logger.debug("Position update loop cancelled due to no running event loop")
         except asyncio.CancelledError:
             logger.debug("Position update loop cancelled")
             pass

@@ -231,13 +231,8 @@ class Controller:
 
         logger.info(f"Controller: Calling elevator: Floor {call_floor}, Direction {call_direction.name.lower()}")
 
-        # Choose the best elevator (always choose the one that takes the shorter arrival time)
-        enabled_elevators = [e for e in self.elevators.values() if e.started]
-        if not enabled_elevators:
-            logger.warning(f"Controller: No enabled elevators available for call at Floor {call_floor} going {call_direction.name.lower()}")
-            return
-
-        elevator = min(enabled_elevators, key=lambda e: e.estimate_arrival_time(call_floor, call_direction))
+        # Choose the best elevator (always choose the one that takes the shorter arrival time among those that are already started)
+        elevator = min(filter(lambda e: e.started, self.elevators.values()), key=lambda e: e.estimate_arrival_time(call_floor, call_direction))
         logger.info(f"Controller: Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
         directed_target_floor = FloorAction(call_floor, call_direction)
 

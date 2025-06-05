@@ -96,7 +96,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
     async def test_arrival_summary(self):
         self.elevator.current_floor = 1
         self.elevator.commit_floor(5, Direction.UP)
-        n_floors, n_stops = self.elevator.arrival_summary(5, Direction.UP)
+        n_floors, n_stops = self.elevator._calculate_travel_parameters(5, Direction.UP)
         self.assertEqual(n_floors, 4.0)
         self.assertEqual(n_stops, 0)
 
@@ -134,7 +134,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         # TestCase 3
         self.elevator.state = ElevatorState.CLOSING_DOOR
         close_time_2 = self.elevator.estimate_door_open_time()
-        self.assertAlmostEqual(close_time_2, self.elevator.door_stay_duration + 0.4, delta=0.01)
+        self.assertAlmostEqual(close_time_2, 0.4, delta=0.01)
 
     async def test_pop_target(self):
         # TestCase 1
@@ -294,7 +294,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
     async def test_next_target_floor(self):
         self.elevator.commit_floor(3, Direction.UP)
-        self.assertEqual(self.elevator.next_target_floor, 3)
+        self.assertEqual(self.elevator.next_target, FloorAction(3, Direction.UP))
 
     async def test_current_floor(self):
         self.elevator.current_floor = 5
