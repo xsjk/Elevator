@@ -214,7 +214,7 @@ class TargetFloorChains:
                 )
 
                 if self.exit_event.is_set():
-                    raise asyncio.CancelledError
+                    raise asyncio.CancelledError("exit")
 
                 # If swap_event is set, reset it and continue the loop
                 if self.swap_event.is_set():
@@ -224,7 +224,7 @@ class TargetFloorChains:
                 await cancel(pending)
 
                 if self.exit_event.is_set():
-                    raise asyncio.CancelledError
+                    raise asyncio.CancelledError("exit")
 
             return self.top()
 
@@ -682,7 +682,7 @@ class Elevator:
                 # Signal that the floor as arrived
         except asyncio.CancelledError as e:
             logger.debug(f"Elevator {self.id}: Move loop cancelled")
-            if str(e) != "stop":
+            if str(e) != "exit":
                 raise e
         except RuntimeError:
             # current running loop was stopped, e.g. by the program exit
@@ -836,7 +836,7 @@ class Elevator:
             return
 
         self.exit_event.set()
-        await cancel((self.door_loop_task, self.move_loop_task), message="stop")
+        await cancel((self.door_loop_task, self.move_loop_task))
 
     @property
     def moving_direction(self) -> Direction:
@@ -1071,10 +1071,10 @@ class Elevators(dict[ElevatorId, Elevator]):
         c.request2eid = self.request2eid.copy()
         return c
 
-    def commit_floor(self, eid: ElevatorId, request: FloorAction) -> asyncio.Event:
+    def commit_floor(self, eid: ElevatorId, request: FloorAction, event: asyncio.Event | None = None) -> asyncio.Event:
         self.request2eid[request] = eid
         self.eid2request[eid].add(request)
-        return self[eid].commit_floor(*request)
+        return self[eid].commit_floor(*request, event=event)
 
     def cancel_commit(self, request: FloorAction) -> asyncio.Event | None:
         eid = self.request2eid.pop(request)
@@ -1107,16 +1107,40 @@ class Elevators(dict[ElevatorId, Elevator]):
                 assignment[eid].add(request)
             yield assignment
 
-    def estimate_total_duration(self, directed_request: FloorAction) -> tuple[float, ElevatorId]:
+    @overload
+    def estimate_total_duration(self) -> float: ...
+
+    @overload
+    def estimate_total_duration(self, directed_request: FloorAction) -> tuple[float, ElevatorId]: ...
+
+    def estimate_total_duration(self, directed_request: FloorAction | None = None) -> float | tuple[float, ElevatorId]:
         """
         Estimate the total duration for all elevators based on their current state and requests.
 
         Returns a tuple of the best elevator ID and the estimated total duration.
         """
         durations = {eid: elevator.estimate_total_duration() for eid, elevator in self.items()}
+        if directed_request is None:
+            return max(durations.values())
         durations = {target_eid: max(e.estimate_total_duration(directed_request) if e.id == target_eid else durations[e.id] for e in self.values()) for target_eid in self.eids}
         best_eid = min(durations, key=lambda eid: durations[eid])
         return durations[best_eid], best_eid
+
+    def pop(self, eid: ElevatorId, default=None) -> Elevator:
+        try:
+            e = super().pop(eid)
+            requests = self.eid2request.pop(e.id)
+            for request in requests:
+                del self.request2eid[request]
+            return e
+        except KeyError:
+            if default is not None:
+                return default
+            raise
+
+    def __setitem__(self, eid: ElevatorId, value: Elevator):
+        super().__setitem__(eid, value)
+        self.eid2request[eid] = set()
 
 
 if __name__ == "__main__":

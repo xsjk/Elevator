@@ -62,13 +62,22 @@ class Controller:
 
         # keep the existing elevators if count is less than current
         if count < len(self.elevators):
+            lost_requests: dict[FloorAction, asyncio.Event] = {}
+
             for i in range(count + 1, len(self.elevators) + 1):
+                requests = self.elevators.eid2request[i]
                 e = self.elevators.pop(i)
-                requests = self.elevators.eid2request.pop(e.id)
-                # TODO: call elevators
-                logger.warning(f"Requests {requests} for elevator {e.id} will be lost, elevator will be stopped")
+                for request in requests:
+                    lost_requests[request] = e.target_floor_arrived[request]
+
                 if e.is_started:
                     self.event_loop.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
+
+            # Reassign lost requests to remaining elevators
+            logger.debug(f"Controller: Reassigning lost requests: {lost_requests}")
+            for request, event in lost_requests.items():
+                eid = self.assign_elevators(request)
+                self.elevators.commit_floor(eid, request, event=event)
 
         # add new elevators if count is more than current
         elif count > len(self.elevators):
@@ -81,11 +90,24 @@ class Controller:
                     door_move_duration=self.config.door_move_duration,
                     door_stay_duration=self.config.door_stay_duration,
                 )
-                self.elevators.eid2request[i] = set()
                 if self._started:
                     self.elevators[i].start()
 
-                # TODO: reassign requests to new elevators
+                if self.config.strategy == Strategy.OPTIMAL:
+                    # TODO: reassign requests to new elevators
+                    logger.debug(f"Controller: Reassigning requests to new elevator {i}")
+                    elevators = self.elevators.copy()
+                    _, _, best_assignment = min(
+                        (
+                            (
+                                elevators.reassign(assignment).estimate_total_duration(),
+                                i,  # in case the duration is the same, we will use the former assignment
+                                assignment,
+                            )
+                            for i, assignment in enumerate(self.elevators.most_possible_assignments)
+                        ),
+                    )
+                    self.elevators.reassign(best_assignment)
 
         self.config.elevator_count = count
 

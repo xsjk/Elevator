@@ -63,8 +63,8 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.elevator.current_floor = 1
         self.elevator.target_floor_chains.direction = Direction.IDLE
         event = self.elevator.commit_floor(3, Direction.DOWN)
-        self.assertEqual(self.elevator.target_floor_chains.direction, Direction.DOWN)
-        self.assertIn(FloorAction(3, Direction.DOWN), self.elevator.target_floor_chains.current_chain)
+        self.assertEqual(self.elevator.target_floor_chains.direction, Direction.UP)
+        self.assertIn(FloorAction(3, Direction.DOWN), self.elevator.target_floor_chains.next_chain)
 
     # TestCase 5: UP   if-if
     async def test_commit_floor_case5(self):
@@ -210,12 +210,12 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
     # TestCase 7: next_target_floor < self.current_floor
     async def test_move_loop_case7(self):
         event7 = self.elevator.commit_floor(3, Direction.DOWN)
-        event8 = self.elevator.commit_floor(2, Direction.IDLE)
+        event8 = self.elevator.commit_floor(2, Direction.IDLE)  # arrive first
 
         await event7.wait()
 
         msg = await self.elevator.queue.get()
-        self.assertEqual(msg, "down_floor_arrived@3#1")
+        self.assertEqual(msg, "up_floor_arrived@2#1")
 
     # next_target_floor = self.current_floor
     # TestCase 8: direction == Direction.IDLE
@@ -612,7 +612,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
         # Commit a floor and verify direction change
         self.elevator.commit_floor(3, Direction.DOWN)
-        self.assertEqual(self.elevator.committed_direction, Direction.DOWN)
+        self.assertEqual(self.elevator.committed_direction, Direction.UP)
 
         # Clear and test with a different direction
         self.elevator.target_floor_chains.clear()

@@ -126,27 +126,6 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
         for eid in self.elevators.eid2request:
             self.assertEqual(copied_elevators.eid2request[eid], self.elevators.eid2request[eid])
 
-    async def test_plan_to_assignment(self):
-        """Test the _plan_to_assignment method"""
-        # Add some requests
-        request1 = FloorAction(2, Direction.UP)
-        request2 = FloorAction(3, Direction.DOWN)
-
-        self.elevators.commit_floor(1, request1)
-        self.elevators.commit_floor(2, request2)
-
-        # Create a plan (reassign both requests to elevator 3)
-        plan = (3, 3)
-
-        # Convert to assignment
-        assignment = self.elevators._plan_to_assignment(plan)
-
-        # Check assignment structure
-        self.assertEqual(len(assignment), self.elevator_count)
-        self.assertEqual(assignment[3], {request1, request2})
-        self.assertEqual(assignment[1], set())
-        self.assertEqual(assignment[2], set())
-
     async def test_apply_assignment(self):
         """Test applying a new assignment of requests"""
         # Set up initial state
@@ -333,6 +312,7 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
         # Clean up
         for elevator in custom_elevators.values():
             elevator.start()
+            await elevator.started
             await elevator.stop()
 
 
