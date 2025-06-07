@@ -147,12 +147,12 @@ class GUIController(Controller):
         self.window.elevator_panels[elevator_id].floor_buttons[str(floor)].setChecked(False)
         return await super().deselect_floor(floor, elevator_id)
 
-    def set_elevator_count(self, count: int):
+    async def set_elevator_count(self, count: int):
         if self.config.elevator_count == count:
             return
 
         self.window.set_elevator_count(count)
-        super().set_elevator_count(count)
+        await super().set_elevator_count(count)
 
     async def get_event_message(self) -> str:
         msg = await super().get_event_message()

@@ -107,11 +107,11 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             button.setChecked.assert_called_once_with(False)
             super_deselect.assert_awaited()
 
-    def test_set_elevator_count(self):
+    async def test_set_elevator_count(self):
         self.controller.config.elevator_count = 3
         self.controller.window.set_elevator_count = MagicMock()
         with patch("system.gui.gui_controller.Controller.set_elevator_count") as super_set:
-            self.controller.set_elevator_count(5)
+            await self.controller.set_elevator_count(5)
             self.controller.window.set_elevator_count.assert_called_once_with(5)
             super_set.assert_called_once_with(5)
 
@@ -119,7 +119,7 @@ class TestGUIController(unittest.IsolatedAsyncioTestCase):
             self.controller.window.set_elevator_count.reset_mock()
             super_set.reset_mock()
             self.controller.config.elevator_count = 5
-            self.controller.set_elevator_count(5)
+            await self.controller.set_elevator_count(5)
             self.controller.window.set_elevator_count.assert_not_called()
             super_set.assert_not_called()
 
