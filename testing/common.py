@@ -25,7 +25,7 @@ class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.controller = GUIController()
-        self.controller.start()
+        await self.controller.start()
         self.window = self.controller.window
         self.building = self.window.building_panel
 

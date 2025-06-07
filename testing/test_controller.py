@@ -7,7 +7,7 @@ from common import Controller, Direction, Floor
 class TestController(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.controller = Controller()
-        self.controller.start()
+        await self.controller.start()
         await asyncio.sleep(0.1)
 
     async def asyncTearDown(self):

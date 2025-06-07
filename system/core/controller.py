@@ -91,7 +91,7 @@ class Controller:
                     door_stay_duration=self.config.door_stay_duration,
                 )
                 if self._started:
-                    self.elevators[i].start()
+                    self.event_loop.create_task(self.elevators[i].start())
 
                 if self.config.strategy == Strategy.OPTIMAL:
                     # TODO: reassign requests to new elevators
@@ -131,11 +131,11 @@ class Controller:
         # Reset elevators
         self.__post_init__()
 
-        self.start()
+        await self.start()
 
         logger.info("Controller: Elevator system has been reset")
 
-    def start(self, tg: asyncio.TaskGroup | asyncio.AbstractEventLoop | None = None):
+    async def start(self, tg: asyncio.TaskGroup | asyncio.AbstractEventLoop | None = None):
         if isinstance(tg, asyncio.AbstractEventLoop):
             self.event_loop = tg
         elif isinstance(tg, asyncio.TaskGroup) and tg._loop is not None:
@@ -148,7 +148,7 @@ class Controller:
             return
 
         for e in self.elevators.values():
-            e.start(tg)
+            await e.start(tg)
 
         self._started = True
 
@@ -379,9 +379,8 @@ if __name__ == "__main__":
         try:
             async with asyncio.TaskGroup() as tg:
                 c = Controller()
-                c.start(tg)
+                await c.start(tg)
 
-                await asyncio.sleep(1)
                 c.handle_message_task("call_up@1")
 
                 while True:

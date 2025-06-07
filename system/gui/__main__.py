@@ -9,7 +9,7 @@ async def main():
     try:
         async with asyncio.TaskGroup() as tg:
             c = GUIController()
-            c.start(tg)
+            await c.start(tg)
 
             async def listen():
                 async for msg in c.messages():

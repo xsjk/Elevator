@@ -26,7 +26,7 @@ async def main(controller: Controller):
 
             await client.send(f"Client[{identity}] is online")
 
-            controller.start(tg)
+            await controller.start(tg)
 
             tg.create_task(input_loop(), name=f"InputLoop {__file__}:{inspect.stack()[0].lineno}")
             tg.create_task(output_loop(), name=f"OutputLoop {__file__}:{inspect.stack()[0].lineno}")

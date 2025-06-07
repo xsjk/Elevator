@@ -93,7 +93,7 @@ class GUIController(Controller):
         # Call parent class handler
         await super().handle_message(message)
 
-    def start(self, tg: asyncio.TaskGroup | asyncio.AbstractEventLoop | None = None):
+    async def start(self, tg: asyncio.TaskGroup | asyncio.AbstractEventLoop | None = None):
         if not hasattr(self, "window"):
             self.window = MainWindow(self)
 
@@ -105,7 +105,7 @@ class GUIController(Controller):
         # Subscribe to elevator events
         self._setup_event_handlers()
 
-        super().start(tg)
+        await super().start(tg)
         self.update_position_task = (tg if tg else asyncio).create_task(self._update_position(), name=f"UpdatePositionLoop {__file__}:{inspect.stack()[0].lineno}")
 
     async def stop(self):

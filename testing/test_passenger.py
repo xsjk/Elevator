@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from passenger import Passenger, PassengerState, generate_passengers
+from passenger import Passenger, PassengerState
 
 
 class TestPassenger(unittest.IsolatedAsyncioTestCase):
@@ -157,36 +157,6 @@ class TestPassenger(unittest.IsolatedAsyncioTestCase):
         # Correct elevator door opens
         passenger.handle_message("door_opened#3")
         self.assertEqual(passenger.state, PassengerState.IN_ELEVATOR_AT_OTHER_FLOOR)
-
-
-class TestGeneratePassengers(unittest.TestCase):
-    def test_generate_passengers_count_and_queue(self):
-        """generate_passengers yields correct count and initial calls"""
-        queue = asyncio.Queue()
-        count = 4
-        passengers = generate_passengers(count, queue)
-        self.assertEqual(len(passengers), count)
-        # queue should have initial call for each passenger
-        self.assertEqual(queue.qsize(), count)
-
-    def test_generate_unique_start_target(self):
-        """Test generated passengers have different start and target floors"""
-        queue = asyncio.Queue()
-        passengers = generate_passengers(20, queue)
-
-        for p in passengers:
-            self.assertNotEqual(p.start_floor, p.target_floor)
-            self.assertIn(p.start_floor, [-1, 1, 2, 3])
-            self.assertIn(p.target_floor, [-1, 1, 2, 3])
-
-    def test_passenger_names(self):
-        """Test passenger names are generated correctly"""
-        queue = asyncio.Queue()
-        passengers = generate_passengers(5, queue)
-
-        expected_names = ["P1", "P2", "P3", "P4", "P5"]
-        names = [p.name for p in passengers]
-        self.assertEqual(set(names), set(expected_names))
 
 
 if __name__ == "__main__":

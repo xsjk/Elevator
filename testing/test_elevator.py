@@ -7,7 +7,7 @@ from common import Direction, DoorDirection, Elevator, ElevatorState, FloorActio
 class TestElevator(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.elevator = Elevator(id=1)
-        self.elevator.start()
+        await self.elevator.start()
 
     async def asyncTearDown(self):
         await self.elevator.stop()

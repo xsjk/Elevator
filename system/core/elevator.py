@@ -805,14 +805,7 @@ class Elevator:
         assert self.move_loop_started.is_set() == self.door_loop_started.is_set()
         return self.move_loop_started.is_set() and self.door_loop_started.is_set()
 
-    @property
-    async def started(self):
-        await asyncio.gather(
-            self.move_loop_started.wait(),
-            self.door_loop_started.wait(),
-        )
-
-    def start(self, tg: asyncio.AbstractEventLoop | asyncio.TaskGroup | None = None):
+    async def start(self, tg: asyncio.AbstractEventLoop | asyncio.TaskGroup | None = None):
         if tg is None:
             tg = asyncio.get_event_loop()
 
@@ -829,6 +822,9 @@ class Elevator:
         if not self.is_started:
             self.door_loop_task = tg.create_task(self._door_loop(), name=f"door_loop_elevator_{self.id} {__file__}:{inspect.stack()[0].lineno}")
             self.move_loop_task = tg.create_task(self._move_loop(), name=f"move_loop_elevator_{self.id} {__file__}:{inspect.stack()[0].lineno}")
+
+        await self.move_loop_started.wait()
+        await self.door_loop_started.wait()
 
     async def stop(self):
         if not self.is_started:
@@ -1149,9 +1145,8 @@ if __name__ == "__main__":
         try:
             async with asyncio.TaskGroup() as tg:
                 e = Elevator(id=1)
-                e.start(tg)
+                await e.start(tg)
 
-                await asyncio.sleep(1)
                 e.commit_floor(2, Direction.UP)
                 e.commit_floor(2, Direction.DOWN)
 

@@ -129,8 +129,7 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
 
         for i in range(1, 7):
             self.controller.set_elevator_count(i)
-            for e in self.controller.elevators.values():
-                await e.started
+            await asyncio.sleep(0.1)
 
             random.shuffle(passenger_configs)
             ps = [Passenger(start, end, f"P({start}, {end})", queue=self.passenger_msg) for start, end in passenger_configs]

@@ -23,7 +23,7 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
 
         # Start all elevators
         for elevator in self.elevators.values():
-            elevator.start()
+            await elevator.start()
 
     async def asyncTearDown(self):
         """Clean up after each test"""
@@ -311,8 +311,7 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
 
         # Clean up
         for elevator in custom_elevators.values():
-            elevator.start()
-            await elevator.started
+            await elevator.start()
             await elevator.stop()
 
 
