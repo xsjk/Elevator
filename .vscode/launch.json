@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+        },
+        {
+            "name": "Python Debugger: system",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "module": "system",
+            "cwd": "${workspaceFolder}",
+        }
+    ]
+}

@@ -8,3 +8,6 @@ __pycache__/
 
 # Qt localization files
 *.qm
+
+# Coverage reports
+.coverage

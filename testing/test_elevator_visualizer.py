@@ -3,8 +3,9 @@ import unittest
 from unittest.mock import patch
 
 from common import Direction, ElevatorVisualizer, Floor, ThemeManager, main_window
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication
+from qtpy.QtCore import QEvent
+from qtpy.QtGui import QColor
+from qtpy.QtWidgets import QApplication
 
 
 class TestElevatorVisualizer(unittest.TestCase):
@@ -59,8 +60,6 @@ class TestElevatorVisualizer(unittest.TestCase):
         self.assertEqual(positions, sorted(self.floors))
 
     def test_change_event_palette(self):
-        from PySide6.QtCore import QEvent
-
         event = QEvent(QEvent.Type.PaletteChange)
         self.visualizer.changeEvent(event)  # only to ensure no exceptions are raised
 
@@ -106,7 +105,7 @@ class TestElevatorVisualizer(unittest.TestCase):
             self.assertIn("not found in floor positions", mock_log.call_args[0][0])
 
     def test_paint_event_callable(self):
-        from PySide6.QtGui import QPaintEvent
+        from qtpy.QtGui import QPaintEvent
 
         event = QPaintEvent(self.visualizer.rect())
         try:

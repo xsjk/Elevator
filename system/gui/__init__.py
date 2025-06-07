@@ -2,7 +2,7 @@ import asyncio
 import sys
 from typing import Coroutine
 
-from PySide6.QtWidgets import QApplication
+from qtpy.QtWidgets import QApplication
 from qasync import QEventLoop
 
 from .gui_controller import GUIController

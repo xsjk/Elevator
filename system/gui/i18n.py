@@ -4,8 +4,8 @@ import subprocess
 import sys
 import re
 
-from PySide6.QtCore import QTranslator
-from PySide6.QtCore import QCoreApplication
+from qtpy.QtCore import QTranslator
+from qtpy.QtCore import QCoreApplication
 
 
 class TranslationManager:
@@ -195,15 +195,3 @@ class TranslationManager:
                             logging.error(f"Error generating .qm file: {result.stderr}")
                     except Exception as e:
                         logging.error(f"Failed to run pyside6-lrelease: {str(e)}")
-
-                        # Fallback: try running as a Python module
-                        try:
-                            logging.debug("Trying to run pyside6-lrelease as a Python module")
-                            result = subprocess.run([sys.executable, "-m", "PySide6.scripts.pyside_tool", "lrelease", ts_file, "-qm", qm_file], capture_output=True, text=True)
-
-                            if result.returncode == 0:
-                                logging.info(f"Successfully generated {qm_file} using Python module")
-                            else:
-                                logging.error(f"Error generating .qm file with Python module: {result.stderr}")
-                        except Exception as e2:
-                            logging.error(f"Failed to run as Python module: {str(e2)}")

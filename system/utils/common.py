@@ -79,6 +79,9 @@ type FloorLike = Floor | int | str
 
 
 class Floor(int):
+    min = -1
+    max = 3
+
     def __new__(cls, value: FloorLike) -> Self:
         if isinstance(value, cls):
             return value
@@ -170,6 +173,13 @@ class FloorAction(tuple[Floor, Direction]):
 class Strategy(IntEnum):
     GREEDY = auto()
     OPTIMAL = auto()
+
+
+class DestinationHeuristic(IntEnum):
+    NONE = auto()
+    NEAREST = auto()
+    FURTHEST = auto()
+    MEAN = auto()
 
 
 async def cancel(tasks: Iterable[asyncio.Task], *, message: str = "exit") -> None:

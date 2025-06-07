@@ -1,9 +1,9 @@
 import logging
 from collections import OrderedDict
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
-from PySide6.QtWidgets import QFrame
+from qtpy.QtCore import QRectF, Qt
+from qtpy.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from qtpy.QtWidgets import QFrame
 
 from ..utils.common import Direction, ElevatorId, Floor, FloorLike
 from . import main_window

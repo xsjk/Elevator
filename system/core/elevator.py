@@ -10,6 +10,7 @@ from ..utils.common import (
     Direction,
     DoorDirection,
     DoorState,
+    DestinationHeuristic,
     ElevatorId,
     ElevatorState,
     Event,
@@ -39,6 +40,11 @@ class TargetFloors(list[FloorAction]):
         bisect.insort(self, FloorAction(floor, direction), key=self.key)
         if not self.is_empty():
             self.nonemptyEvent.set()
+
+    def add_unique(self, floor: FloorLike, direction: Direction):
+        action = FloorAction(floor, direction)
+        if action not in self:
+            self.add(floor, direction)
 
     def top(self) -> FloorAction:
         return self[0]
@@ -334,14 +340,45 @@ class TargetFloorChains:
         chain.add(floor, requested_direction)
         return self.top() == directed_floor
 
-    def get_metric(self, start_pos: float) -> tuple[float, int]:
+    @property
+    def chains(self) -> tuple[TargetFloors, TargetFloors, TargetFloors]:
+        return self.current_chain, self.next_chain, self.future_chain
+
+    def get_metric(self, start_pos: float, destination_heuristic: DestinationHeuristic = DestinationHeuristic.NONE) -> tuple[float, float]:
         """
         Estimate the number of floors traveled and stops needed to reach the target floor.
         This is used for calculating the travel time.
         """
-        n_floors = sum(abs(f1 - f2) for f1, f2 in pairwise((start_pos,) + tuple(a.floor for a in self)))
-        n_stops = len(self)
-        return n_floors, n_stops
+        match destination_heuristic:
+            case DestinationHeuristic.NONE:
+                n_floors = sum(abs(f1 - f2) for f1, f2 in pairwise((start_pos,) + tuple(a.floor for a in self)))
+                n_stops = len(self)
+                return n_floors, n_stops
+            case DestinationHeuristic.NEAREST | DestinationHeuristic.FURTHEST:
+                clone = copy(self)
+                for chain, clone_chain in zip(self.chains, clone.chains):
+                    for action in chain:
+                        match action.direction:
+                            case Direction.IDLE:
+                                continue
+                            case Direction.UP:
+                                match destination_heuristic:
+                                    case DestinationHeuristic.NEAREST:
+                                        clone_chain.add_unique(action.floor + 1, Direction.IDLE)
+                                    case DestinationHeuristic.FURTHEST:
+                                        clone_chain.add_unique(Floor.max, Direction.IDLE)
+                            case Direction.DOWN:
+                                match destination_heuristic:
+                                    case DestinationHeuristic.NEAREST:
+                                        clone_chain.add_unique(action.floor - 1, Direction.IDLE)
+                                    case DestinationHeuristic.FURTHEST:
+                                        clone_chain.add_unique(Floor.min, Direction.IDLE)
+                return clone.get_metric(start_pos)
+            case DestinationHeuristic.MEAN:
+                # the mean of the nearest and furthest destinations
+                nearest = self.get_metric(start_pos, DestinationHeuristic.NEAREST)
+                furthest = self.get_metric(start_pos, DestinationHeuristic.FURTHEST)
+                return ((nearest[0] + furthest[0]) / 2, (nearest[1] + furthest[1]) / 2)
 
 
 @dataclass
@@ -400,6 +437,9 @@ class Elevator:
         c = copy(self)
         c.target_floor_chains = copy(self.target_floor_chains)
         c.target_floor_arrived = {k: asyncio.Event() for k in self.target_floor_arrived}
+        for k, v in self.target_floor_arrived.items():
+            if v.is_set():
+                c.target_floor_arrived[k].set()
         c.door_action_queue = asyncio.Queue()
         c.door_action_processed = asyncio.Event()
         c.queue = asyncio.Queue()
@@ -501,7 +541,7 @@ class Elevator:
             duration = 0.0
         return duration
 
-    def calculate_duration(self, n_floors: float, n_stops: int) -> float:
+    def calculate_duration(self, n_floors: float, n_stops: int | float) -> float:
         """
         Calculate travel duration based on floors and stops.
         """
@@ -689,7 +729,7 @@ class Elevator:
             logger.warning(f"Elevator {self.id}: Move loop cancelled due to RuntimeError")
             pass
         except Exception as e:
-            logger.error(f"Elevator {self.id}: Move loop encountered an error: {e}")
+            logger.error(f"Elevator {self.id}: Move loop encountered an error: {type(e).__name__}: {e}")
             raise e
         finally:
             self.move_loop_started.clear()
@@ -802,8 +842,7 @@ class Elevator:
 
     @property
     def is_started(self) -> bool:
-        assert self.move_loop_started.is_set() == self.door_loop_started.is_set()
-        return self.move_loop_started.is_set() and self.door_loop_started.is_set()
+        return self.move_loop_started.is_set() or self.door_loop_started.is_set()
 
     async def start(self, tg: asyncio.AbstractEventLoop | asyncio.TaskGroup | None = None):
         if tg is None:
@@ -948,27 +987,25 @@ class Elevator:
     def directed_floor(self) -> FloorAction:
         return FloorAction(self.current_floor, self.committed_direction)
 
-    @overload
-    def estimate_total_duration(self) -> float:
+    def estimate_total_duration(self, directed_request: FloorAction | None = None, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.NONE) -> float:
         """
-        Estimate the total time for all actions in the elevator's target floor chains.
-        """
-        ...
+        Estimate the total duration to reach the target floor, including door operations and travel time.
+        If `directed_request` is None, it estimates the duration for the current target floor chain.
+        If `directed_request` is provided, it estimates the duration to reach that floor.
 
-    @overload
-    def estimate_total_duration(self, directed_request: FloorAction) -> float:
+        Args:
+            directed_request (FloorAction | None): The floor action to estimate duration for, or None for current target.
+            destination_heuristic (DestinationHeuristic): Heuristic to use for estimating the target floor chain.
+        Returns:
+            float: Estimated duration in seconds.
         """
-        Estimate the total time for all actions in the elevator's target floor chains after adding a new directed request.
-        """
-        ...
 
-    def estimate_total_duration(self, directed_request: FloorAction | None = None) -> float:
         duration = 0.0
         if directed_request is None:
             if not self.state.is_moving():
                 duration += self.estimate_door_close_time()
 
-            n_floors, n_stops = self.target_floor_chains.get_metric(self.current_position)
+            n_floors, n_stops = self.target_floor_chains.get_metric(self.current_position, destination_heuristic)
             duration += self.calculate_duration(n_floors, n_stops)
             return duration
 
@@ -983,7 +1020,7 @@ class Elevator:
                 # No further actions, just return the door open time
                 return duration
 
-            n_floors, n_stops = self.target_floor_chains.get_metric(self.current_position)
+            n_floors, n_stops = self.target_floor_chains.get_metric(self.current_position, destination_heuristic)
             duration += self.calculate_duration(n_floors, n_stops)
             return duration
 
@@ -996,7 +1033,7 @@ class Elevator:
         if not self.state.is_moving():
             duration += self.estimate_door_close_time()
 
-        n_floors, n_stops = chain_copy.get_metric(self.current_position)
+        n_floors, n_stops = chain_copy.get_metric(self.current_position, destination_heuristic)
 
         # Add travel time for all floors and stops
         duration += self.calculate_duration(n_floors, n_stops)
@@ -1031,8 +1068,9 @@ class Elevators(dict[ElevatorId, Elevator]):
         })
         self.eid2request: dict[ElevatorId, set[FloorAction]] = {e.id: set() for e in self.values()}
         self.request2eid: dict[FloorAction, ElevatorId] = {}
+        self.request2event: dict[FloorAction, asyncio.Event] = {}
 
-    def reassign(self, assignment: dict[ElevatorId, set[FloorAction]]) -> Self:
+    def reassign(self, assignment: dict[ElevatorId, set[FloorAction]], strict: bool = False) -> Self:
         """
         Apply a new assignment of requests to elevators.
         """
@@ -1042,8 +1080,8 @@ class Elevators(dict[ElevatorId, Elevator]):
         for eid, requests_set in self.eid2request.items():
             for request in requests_set:
                 if request not in assignment[eid]:
-                    event = self[eid].cancel_commit(*request)
-                    assert event is not None
+                    event = self.request2event[request]
+                    self[eid].cancel_commit(*request)
                     events[request] = event
 
         # Step 2: Commit new requests to elevators
@@ -1065,17 +1103,24 @@ class Elevators(dict[ElevatorId, Elevator]):
         c.update({eid: elevator.copy() for eid, elevator in self.items()})
         c.eid2request = self.eid2request.copy()
         c.request2eid = self.request2eid.copy()
+        c.request2event = self.request2event.copy()
         return c
 
     def commit_floor(self, eid: ElevatorId, request: FloorAction, event: asyncio.Event | None = None) -> asyncio.Event:
+        event = self[eid].commit_floor(*request, event=event)
+        assert event is not None
         self.request2eid[request] = eid
+        self.request2event[request] = event
+        assert event is self[eid].target_floor_arrived[request]
         self.eid2request[eid].add(request)
-        return self[eid].commit_floor(*request, event=event)
+        return event
 
-    def cancel_commit(self, request: FloorAction) -> asyncio.Event | None:
+    def cancel_commit(self, request: FloorAction) -> asyncio.Event:
         eid = self.request2eid.pop(request)
+        event = self.request2event.pop(request)
         self.eid2request[eid].remove(request)
-        return self[eid].cancel_commit(*request)
+        self[eid].cancel_commit(*request)
+        return event
 
     @property
     def requests(self) -> set[FloorAction]:
@@ -1104,21 +1149,25 @@ class Elevators(dict[ElevatorId, Elevator]):
             yield assignment
 
     @overload
-    def estimate_total_duration(self) -> float: ...
+    def estimate_total_duration(self, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.NONE) -> float:
+        """
+        Estimate the total time for all actions in all elevators.
+        """
+        ...
 
     @overload
-    def estimate_total_duration(self, directed_request: FloorAction) -> tuple[float, ElevatorId]: ...
-
-    def estimate_total_duration(self, directed_request: FloorAction | None = None) -> float | tuple[float, ElevatorId]:
+    def estimate_total_duration(self, directed_request: FloorAction, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.NONE) -> tuple[float, ElevatorId]:
         """
-        Estimate the total duration for all elevators based on their current state and requests.
-
-        Returns a tuple of the best elevator ID and the estimated total duration.
+        Estimate the total time for all actions in all elevators after adding a new directed request.
+        Returns a tuple of estimated duration and the best elevator ID to handle the request.
         """
-        durations = {eid: elevator.estimate_total_duration() for eid, elevator in self.items()}
+        ...
+
+    def estimate_total_duration(self, directed_request: FloorAction | None = None, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.NONE):
+        durations = {eid: elevator.estimate_total_duration(destination_heuristic=destination_heuristic) for eid, elevator in self.items()}
         if directed_request is None:
             return max(durations.values())
-        durations = {target_eid: max(e.estimate_total_duration(directed_request) if e.id == target_eid else durations[e.id] for e in self.values()) for target_eid in self.eids}
+        durations = {target_eid: max(e.estimate_total_duration(directed_request, destination_heuristic=destination_heuristic) if e.id == target_eid else durations[e.id] for e in self.values()) for target_eid in self.eids}
         best_eid = min(durations, key=lambda eid: durations[eid])
         return durations[best_eid], best_eid
 

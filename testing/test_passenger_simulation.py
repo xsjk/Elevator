@@ -14,6 +14,11 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         await super().asyncSetUp()
         self.passenger_msg = asyncio.Queue()
         self.message_task = asyncio.create_task(self.process_passenger_requests())
+        self.controller.set_config(
+            floor_travel_duration=0.1,
+            door_stay_duration=0.1,
+            door_move_duration=0.1,
+        )
 
     async def asyncTearDown(self):
         if self.message_task:
@@ -70,29 +75,35 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
             self.fail(f"Simulation timed out after {timeout} seconds. Active passengers: {len(active)}")
 
     async def test_single_passenger_up(self):
+        await self.controller.set_elevator_count(2)
         passenger = Passenger(1, 3, "P1", queue=self.passenger_msg)
         await self.simulate_passengers([passenger], timeout=5 + 2 * 3 + 1 + 0.5)
 
     async def test_single_passenger_down(self):
+        await self.controller.set_elevator_count(2)
         passenger = Passenger(3, 1, "P2", queue=self.passenger_msg)
         await self.simulate_passengers([passenger], timeout=2 * 3 + 5 + 2 * 3 + 1 + 0.7)
 
     async def test_multiple_passengers_same_elevator(self):
+        await self.controller.set_elevator_count(2)
         p1 = Passenger(1, 3, "P1", queue=self.passenger_msg)
         p2 = Passenger(2, 3, "P2", queue=self.passenger_msg)
         await self.simulate_passengers([p1, p2], timeout=5 + 2 * 3 + 1 + 0.5)
 
     async def test_multiple_passengers_different_directions(self):
+        await self.controller.set_elevator_count(2)
         p1 = Passenger(1, 3, "P1", queue=self.passenger_msg)
         p2 = Passenger(3, -1, "P2", queue=self.passenger_msg)
         await self.simulate_passengers([p1, p2], timeout=2 * 3 + 5 + 3 * 3 + 1 + 0.8)
 
     async def test_complex_passenger_scenario_1(self):
+        await self.controller.set_elevator_count(2)
         p1 = Passenger(-1, 3, "P1", queue=self.passenger_msg)
         p2 = Passenger(3, 1, "P2", queue=self.passenger_msg)
         await self.simulate_passengers([p1, p2], timeout=2 * 3 + 5 + 2 * 3 + 1 + 0.7)
 
     async def test_complex_passenger_scenario_2(self):
+        await self.controller.set_elevator_count(2)
         p1 = Passenger(1, 3, "P1", queue=self.passenger_msg)
         p2 = Passenger(2, 3, "P2", queue=self.passenger_msg)
         p3 = Passenger(2, -1, "P3", queue=self.passenger_msg)
@@ -117,12 +128,6 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         await self.simulate_passengers(ps)
 
     async def test_random_passengers(self):
-        self.controller.set_config(
-            floor_travel_duration=0.1,
-            door_stay_duration=0.1,
-            door_move_duration=0.1,
-        )
-
         passenger_configs = []
         for c in combinations([Floor(i) for i in (-1, 1, 2, 3)], 2):
             passenger_configs.extend([c, c[::-1]])

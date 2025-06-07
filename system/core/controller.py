@@ -1,9 +1,19 @@
 import asyncio
 import inspect
 from dataclasses import dataclass, field
-from typing import AsyncGenerator
+from typing import AsyncGenerator, overload
 
-from ..utils.common import Direction, DoorDirection, ElevatorId, Event, Floor, FloorAction, FloorLike, Strategy
+from ..utils.common import (
+    DestinationHeuristic,
+    Direction,
+    DoorDirection,
+    ElevatorId,
+    Event,
+    Floor,
+    FloorAction,
+    FloorLike,
+    Strategy,
+)
 from ..utils.event_bus import event_bus
 from .elevator import Elevator, Elevators, logger
 
@@ -68,10 +78,10 @@ class Controller:
                 requests = self.elevators.eid2request[i]
                 e = self.elevators.pop(i)
                 for request in requests:
-                    lost_requests[request] = e.target_floor_arrived[request]
+                    lost_requests[request] = event = e.target_floor_arrived[request]
+                    assert event is self.elevators.request2event[request]
 
-                if e.is_started:
-                    await e.stop()
+                await e.stop()
 
             # Reassign lost requests to remaining elevators
             logger.debug(f"Controller: Reassigning lost requests: {lost_requests}")
@@ -94,20 +104,7 @@ class Controller:
                     await self.elevators[i].start()
 
                 if self.config.strategy == Strategy.OPTIMAL:
-                    # TODO: reassign requests to new elevators
-                    logger.debug(f"Controller: Reassigning requests to new elevator {i}")
-                    elevators = self.elevators.copy()
-                    _, _, best_assignment = min(
-                        (
-                            (
-                                elevators.reassign(assignment).estimate_total_duration(),
-                                i,  # in case the duration is the same, we will use the former assignment
-                                assignment,
-                            )
-                            for i, assignment in enumerate(self.elevators.most_possible_assignments)
-                        ),
-                    )
-                    self.elevators.reassign(best_assignment)
+                    self.optimal_reassign()
 
         self.config.elevator_count = count
 
@@ -242,7 +239,15 @@ class Controller:
         while True:
             yield await self.get_event_message()
 
-    def optimal_reassign(self, request: FloorAction) -> ElevatorId:
+    @overload
+    def optimal_reassign(self, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.MEAN) -> None:
+        """
+        Reassign elevators calls to optimize total travel time.
+        """
+        ...
+
+    @overload
+    def optimal_reassign(self, request: FloorAction, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.MEAN) -> ElevatorId:
         """
         Find the optimal assignment of elevators to floor requests.
         Uses a combinatorial approach to evaluate different assignments.
@@ -250,15 +255,16 @@ class Controller:
         Args:
             directed_target: The new floor request to be considered
         """
+        ...
 
+    def optimal_reassign(self, request: FloorAction | None = None, *, destination_heuristic: DestinationHeuristic = DestinationHeuristic.MEAN):
         # Create a copy of elevators for simulation
         elevators = self.elevators.copy()
 
-        # Find the best assignment plan by evaluating all possible combinations
-        (_, best_elevator_id), _, best_assignment = min(
+        best_estimation_result, _, best_assignment = min(
             (
                 (
-                    elevators.reassign(assignment).estimate_total_duration(request),
+                    elevators.reassign(assignment).estimate_total_duration(request, destination_heuristic=destination_heuristic) if request else elevators.reassign(assignment).estimate_total_duration(destination_heuristic=destination_heuristic),
                     i,  # in case the duration is the same, we will use the former assignment
                     assignment,
                 )
@@ -271,9 +277,14 @@ class Controller:
             logger.debug("Controller: Current assignment is already optimal")
         else:
             # Apply changes to real elevators
-            self.elevators.reassign(best_assignment)
+            self.elevators.reassign(best_assignment, strict=True)
             logger.debug(f"Controller: Optimized elevator assignments: {best_assignment}")
 
+        if request is None:
+            return
+
+        assert isinstance(best_estimation_result, tuple)
+        _, best_elevator_id = best_estimation_result
         return best_elevator_id
 
     def assign_elevators(self, request: FloorAction) -> ElevatorId:
@@ -281,9 +292,7 @@ class Controller:
             case Strategy.GREEDY:
                 return min(self.elevators, key=lambda i: self.elevators[i].estimate_total_duration(request))
             case Strategy.OPTIMAL:
-                # Optimal strategy: reassign elevators based on the optimal assignment
                 return self.optimal_reassign(request)
-
             case _:
                 raise ValueError(f"Controller: Invalid strategy {self.config.strategy}")
 
@@ -341,7 +350,10 @@ class Controller:
 
         try:
             elevator.selected_floors.add(floor)
-            await elevator.commit_floor(floor, Direction.IDLE).wait()
+            event = elevator.commit_floor(floor, Direction.IDLE)
+            if self.config.strategy == Strategy.OPTIMAL:
+                self.optimal_reassign()
+            await event.wait()
             event_bus.publish(Event.FLOOR_ARRIVED, floor, elevator_id)
         except asyncio.CancelledError as e:
             if str(e) != "deselect":

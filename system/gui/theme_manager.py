@@ -3,14 +3,18 @@ Theme Manager for Elevator Control System
 Handles loading and switching between light and dark themes
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal
-from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication
+from qtpy.QtCore import QCoreApplication, QEvent, QObject
+from qtpy.QtGui import QPalette
+from qtpy.QtWidgets import QApplication
 
-import logging
+try:
+    from qtpy.QtCore import Signal
+except ImportError:
+    from qtpy.QtCore import pyqtSignal as Signal
 
 
 class ThemeManager(QObject):

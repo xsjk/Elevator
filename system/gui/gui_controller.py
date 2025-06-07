@@ -44,9 +44,9 @@ class GUIController(Controller):
             if hasattr(self.window, "elevator_visualizer"):
                 self.window.elevator_visualizer.update_elevator_status(elevator_id, floor, door_open=door_state.is_open(), direction=direction)
 
-            logging.debug(f"Updated UI for elevator {elevator_id}: floor={floor}, door={door_state}, direction={direction}")
+            logger.debug(f"Updated UI for elevator {elevator_id}: floor={floor}, door={door_state}, direction={direction}")
         except Exception as e:
-            logging.error(f"Error updating elevator UI: {e}")
+            logger.error(f"Error updating elevator UI: {e}")
             raise e
 
     def _on_call_completed(self, floor: FloorLike, direction: Direction):
@@ -88,7 +88,7 @@ class GUIController(Controller):
         """
         # Using QCoreApplication.translate for translation
         self.window.console_widget.log_message(f"🡒 {message}")
-        logging.info(f"Processing command: {message}")
+        logger.info(f"Processing command: {message}")
 
         # Call parent class handler
         await super().handle_message(message)

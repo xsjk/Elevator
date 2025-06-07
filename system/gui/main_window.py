@@ -1,7 +1,7 @@
 import logging
 
-from PySide6.QtCore import QCoreApplication, Qt
-from PySide6.QtWidgets import (
+from qtpy.QtCore import QCoreApplication, Qt
+from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
