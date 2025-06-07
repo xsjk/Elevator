@@ -66,7 +66,7 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         try:
             async with asyncio.timeout(timeout):
                 await process_controller_messages()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.fail(f"Simulation timed out after {timeout} seconds. Active passengers: {len(active)}")
 
     async def test_single_passenger_up(self):
@@ -99,7 +99,7 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         await self.simulate_passengers([p1, p2, p3], timeout=5 + 3 + 5 + 3 + 1 + 0.8)
 
     async def test_complete_condition(self):
-        self.controller.set_elevator_count(1)
+        await self.controller.set_elevator_count(1)
         ps = []
         for start_floor, end_floor in combinations([Floor(i) for i in (-1, 1, 2, 3)], 2):
             ps.append(Passenger(start_floor, end_floor, f"P({start_floor}, {end_floor})", queue=self.passenger_msg))
@@ -108,7 +108,7 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         await self.simulate_passengers(ps)
 
     async def test_complete_condition_reversed(self):
-        self.controller.set_elevator_count(1)
+        await self.controller.set_elevator_count(1)
         ps = []
         for start_floor, end_floor in combinations([Floor(i) for i in (3, 2, 1, -1)], 2):
             ps.append(Passenger(start_floor, end_floor, f"P({start_floor}, {end_floor})", queue=self.passenger_msg))
@@ -128,12 +128,11 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
             passenger_configs.extend([c, c[::-1]])
 
         for i in range(1, 7):
-            self.controller.set_elevator_count(i)
-            await asyncio.sleep(0.1)
+            await self.controller.set_elevator_count(i)
 
             random.shuffle(passenger_configs)
             ps = [Passenger(start, end, f"P({start}, {end})", queue=self.passenger_msg) for start, end in passenger_configs]
-            await self.simulate_passengers(ps)
+            await self.simulate_passengers(ps, timeout=30)
 
 
 if __name__ == "__main__":

@@ -42,7 +42,7 @@ class Controller:
         for key, value in kwargs.items():
             # Special handling for elevator count
             if key == "elevator_count":
-                self.set_elevator_count(value)
+                self.event_loop.create_task(self.set_elevator_count(value), name=f"SetElevatorCount-{value} {__file__}:{inspect.stack()[0].lineno}")
                 continue
 
             # Other configuration keys
@@ -56,7 +56,7 @@ class Controller:
             else:
                 raise ValueError(f"Controller: Invalid configuration key '{key}'")
 
-    def set_elevator_count(self, count: int):
+    async def set_elevator_count(self, count: int):
         if count < 1:
             raise ValueError("Controller: Elevator count must be at least 1")
 
@@ -71,7 +71,7 @@ class Controller:
                     lost_requests[request] = e.target_floor_arrived[request]
 
                 if e.is_started:
-                    self.event_loop.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
+                    await e.stop()
 
             # Reassign lost requests to remaining elevators
             logger.debug(f"Controller: Reassigning lost requests: {lost_requests}")
@@ -91,7 +91,7 @@ class Controller:
                     door_stay_duration=self.config.door_stay_duration,
                 )
                 if self._started:
-                    self.event_loop.create_task(self.elevators[i].start())
+                    await self.elevators[i].start()
 
                 if self.config.strategy == Strategy.OPTIMAL:
                     # TODO: reassign requests to new elevators

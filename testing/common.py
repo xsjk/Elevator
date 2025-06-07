@@ -22,6 +22,8 @@ logger.setLevel("CRITICAL")  # Suppress logging during tests
 
 class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
     loop_factory = staticmethod(gui.setup)
+    if sys.version_info < (3, 13):
+        raise RuntimeError("This test requires Python 3.13 or higher for loop_factory support")
 
     async def asyncSetUp(self):
         self.controller = GUIController()

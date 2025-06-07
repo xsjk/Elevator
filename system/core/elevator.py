@@ -1086,7 +1086,7 @@ class Elevators(dict[ElevatorId, Elevator]):
         return set(self.keys())
 
     @property
-    def most_possible_assignments(self) -> Generator[dict[ElevatorId, set[FloorAction]]]:
+    def most_possible_assignments(self) -> Generator[dict[ElevatorId, set[FloorAction]], None, None]:
         request_count = len(self.request2eid)
         max_eid_count = min(len(self.eids), request_count)
         for plan in combinations_with_replacement(self.eids, request_count):
