@@ -48,7 +48,7 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
     async def test_open_door_on_arrival_and_autoclose(self):
         """UC1-b: Elevator arrives at target floor -> door opens automatically"""
         self.building.down_buttons["2"].click()
-        await asyncio.sleep(self.controller.config.floor_travel_duration + 0.2)
+        await asyncio.sleep(self.controller.config.floor_travel_duration + 0.1)
 
         # Assert elevator has arrived at floor 2
         self.assertEqual(self.elevator1.current_floor, Floor("2"))
@@ -57,11 +57,9 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.assertEqual(self.elevator1.state, ElevatorState.OPENING_DOOR)
         self.assertIn("开", self.elevator1_UI.door_label.text())
 
-        await asyncio.sleep(4)
+        await asyncio.sleep(4.5)
         # Door should close automatically after stay duration
         self.assertEqual(self.elevator1.state, ElevatorState.CLOSING_DOOR)
-
-        await asyncio.sleep(0.5)
         self.building.down_buttons["2"].click()
 
         await asyncio.sleep(0.1)

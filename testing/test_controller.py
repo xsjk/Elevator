@@ -13,7 +13,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.controller.stop()
 
-    async def testreset(self):
+    async def test_reset(self):
         await self.controller.queue.put("test_event")
 
         await self.controller.reset()
@@ -31,22 +31,22 @@ class TestController(unittest.IsolatedAsyncioTestCase):
         task = self.controller.handle_message_task("call_up@2")
         await asyncio.sleep(0.05)
 
-        self.assertEqual(len(self.controller.requests), 1)
+        self.assertEqual(len(self.controller.elevators.requests), 1)
 
         await self.controller.handle_message("cancel_call_up@2")
         await asyncio.sleep(0.05)
-        self.assertEqual(len(self.controller.requests), 0)
+        self.assertEqual(len(self.controller.elevators.requests), 0)
         self.assertNotIn("call_up@2", self.controller.message_tasks)
 
     async def test_handle_cancel_call_down(self):
         task = self.controller.handle_message_task("call_down@3")
         await asyncio.sleep(0.05)
 
-        self.assertEqual(len(self.controller.requests), 1)
+        self.assertEqual(len(self.controller.elevators.requests), 1)
 
         await self.controller.handle_message("cancel_call_down@3")
         await asyncio.sleep(0.05)
-        self.assertEqual(len(self.controller.requests), 0)
+        self.assertEqual(len(self.controller.elevators.requests), 0)
         self.assertNotIn("call_down@3", self.controller.message_tasks)
 
     async def test_handle_select_floor(self):
@@ -84,7 +84,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
     async def test_call_elevator(self):
         await self.controller.call_elevator(Floor("2"), Direction.UP)
         self.assertEqual(self.controller.elevators[1].current_floor, 2)
-        self.assertNotIn((Floor("2"), Direction.UP), self.controller.requests)
+        self.assertNotIn((Floor("2"), Direction.UP), self.controller.elevators.requests)
 
     async def test_select_floor(self):
         await self.controller.select_floor(Floor("3"), 1)

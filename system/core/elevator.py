@@ -3,18 +3,20 @@ import bisect
 import inspect
 from copy import copy
 from dataclasses import dataclass, field
-from itertools import chain
-from typing import Iterator, Self, SupportsIndex
+from itertools import chain, combinations_with_replacement, pairwise
+from typing import Iterable, Iterator, Self, SupportsIndex, overload
 
 from ..utils.common import (
     Direction,
     DoorDirection,
     DoorState,
+    ElevatorId,
     ElevatorState,
     Event,
     Floor,
     FloorAction,
     FloorLike,
+    cancel,
 )
 from ..utils.event_bus import event_bus
 from .logger import logger
@@ -112,7 +114,6 @@ class TargetFloorChains:
     @direction.setter
     def direction(self, new_direction: Direction):
         if new_direction == Direction.IDLE:
-            logger.debug("Setting direction to IDLE, this should be done only when all chains are empty")
             assert self.is_empty(), "Cannot set direction to IDLE when there are actions in the chains"
         self.current_chain.direction = new_direction
         self.next_chain.direction = -new_direction
@@ -188,6 +189,8 @@ class TargetFloorChains:
         wait_tasks: list[asyncio.Task] = []
         try:
             while self.is_empty():
+                wait_tasks.clear()
+
                 for name, e in zip(
                     [
                         "current_chain.nonemptyEvent",
@@ -205,31 +208,28 @@ class TargetFloorChains:
                 ):
                     wait_tasks.append(self.event_loop.create_task(self._wait_event(e), name=f"wait {name} {__file__}:{inspect.stack()[0].lineno}"))
 
-                await asyncio.wait(
+                _, pending = await asyncio.wait(
                     wait_tasks,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
+
                 if self.exit_event.is_set():
                     raise asyncio.CancelledError
 
                 # If swap_event is set, reset it and continue the loop
                 if self.swap_event.is_set():
                     self.swap_event.clear()
-                    continue
+
+                # stop all pending tasks
+                await cancel(pending)
+
+                if self.exit_event.is_set():
+                    raise asyncio.CancelledError
 
             return self.top()
 
         finally:
-            error: asyncio.CancelledError | None = None
-            for task in wait_tasks:
-                task.cancel("exit")
-                try:
-                    await task
-                except asyncio.CancelledError as e:
-                    if str(e) != "exit":
-                        error = e
-            if error is not None:
-                raise asyncio.CancelledError from error
+            await cancel(wait_tasks)
 
     def remove(self, item: FloorAction):
         if item in self.current_chain:
@@ -258,6 +258,7 @@ class TargetFloorChains:
         self.current_chain.clear()
         self.next_chain.clear()
         self.future_chain.clear()
+        self.direction = Direction.IDLE
 
     def __copy__(self) -> Self:
         c = self.__class__(event_loop=self.event_loop)
@@ -324,11 +325,20 @@ class TargetFloorChains:
         chain.add(floor, requested_direction)
         return self.top() == directed_floor
 
+    def get_metric(self, start_pos: float) -> tuple[float, int]:
+        """
+        Estimate the number of floors traveled and stops needed to reach the target floor.
+        This is used for calculating the travel time.
+        """
+        n_floors = sum(abs(f1 - f2) for f1, f2 in pairwise((start_pos,) + tuple(a.floor for a in self)))
+        n_stops = len(self)
+        return n_floors, n_stops
+
 
 @dataclass
 class Elevator:
     # Attributes
-    id: int  # Using int for ID
+    id: ElevatorId  # Using int for ID
 
     floor_travel_duration: float = 1.0
     accelerate_duration: float = 1.0
@@ -363,7 +373,6 @@ class Elevator:
     ## [(4, IDLE), (4, DOWN), (2, IDLE), (2, DOWN), (1, IDLE), (3, UP), (4, UP)]
     # e.g. []
     target_floor_arrived: dict[FloorAction, asyncio.Event] = field(default_factory=dict)
-    target_floor_processed: asyncio.Event = field(default_factory=asyncio.Event)  # Event that is set when the target floor is processed
 
     _moving_timestamp: float | None = None  # Timestamp when movement starts
     _moving_speed: float | None = None  # Speed of the elevator during movement, None if not moving
@@ -382,8 +391,8 @@ class Elevator:
         c = copy(self)
         c.target_floor_chains = copy(self.target_floor_chains)
         c.target_floor_arrived = {k: asyncio.Event() for k in self.target_floor_arrived}
-        c.target_floor_processed = asyncio.Event()
         c.door_action_queue = asyncio.Queue()
+        c.door_action_processed = asyncio.Event()
         c.queue = asyncio.Queue()
         return c
 
@@ -394,7 +403,7 @@ class Elevator:
         self.door_action_processed.clear()
         await self.door_action_processed.wait()
 
-    def commit_floor(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE) -> asyncio.Event:
+    def commit_floor(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE, event: asyncio.Event | None = None) -> asyncio.Event:
         """
         Commit a floor to the elevator's list of target floors and calculate its estimated arrival time.
 
@@ -417,17 +426,13 @@ class Elevator:
 
         # Determine which chain to add the action to based on current direction and request
         # This is the core of the elevator scheduling algorithm
-        target_direction = self.direction_to(floor)
-        if self.target_floor_chains.add(directed_floor, target_direction=target_direction):
-            logger.debug(f"Elevator {self.id}: {FloorAction(floor, requested_direction)} may need immediate processing")
-        else:
-            logger.debug(f"Elevator {self.id}: {FloorAction(floor, requested_direction)} added to the chain for later processing")
+        self.target_floor_chains.add(directed_floor, target_direction=self.direction_to(floor))
 
         # Create and store the event that will be triggered when floor is reached
-        self.target_floor_arrived[directed_floor] = asyncio.Event()
+        self.target_floor_arrived[directed_floor] = asyncio.Event() if event is None else event
         return self.target_floor_arrived[directed_floor]
 
-    def cancel_commit(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE):
+    def cancel_commit(self, floor: FloorLike, requested_direction: Direction = Direction.IDLE) -> asyncio.Event | None:
         floor = Floor(floor)
         directed_floor = FloorAction(floor, requested_direction)
 
@@ -439,8 +444,7 @@ class Elevator:
             self.target_floor_chains.remove(directed_floor)
 
             assert directed_floor in self.target_floor_arrived
-            self.target_floor_arrived.pop(directed_floor).set()
-            logger.debug(f"Elevator {self.id}: {self.target_floor_chains}")
+            return self.target_floor_arrived.pop(directed_floor)  # .set()
 
     def estimate_door_close_time(self) -> float:
         """
@@ -567,6 +571,7 @@ class Elevator:
             self.move_loop_started = True
             while True:
                 # Get the target floor from the plan
+                logger.debug(f"Elevator {self.id}: Waiting for target floor")
                 target_floor, direction = directed_floor = await self.target_floor_chains.get()
                 logger.debug(f"Elevator {self.id}: Target floor received: {target_floor} with direction {direction.name}")
 
@@ -586,7 +591,9 @@ class Elevator:
                                 raise RuntimeError(f"Invalid elevator state {self.state.name} while waiting for door to close")
 
                 # Wait for the door not open or moving
-                await self.door_idle_event.wait()
+                if not self.door_idle_event.is_set():
+                    logger.debug(f"Elevator {self.id}: Waiting for door to close before moving")
+                    await self.door_idle_event.wait()
 
                 # Start the elevator movement (move from current floor to target floor)
                 self._moving_timestamp = self.event_loop.time()
@@ -594,7 +601,6 @@ class Elevator:
 
                 if self.current_floor < target_floor:
                     self.state = ElevatorState.MOVING_UP
-                    # TODO trigger animation
                     await asyncio.sleep(self.floor_travel_duration)
                     self.current_floor += 1
 
@@ -604,7 +610,6 @@ class Elevator:
 
                 elif self.current_floor > target_floor:
                     self.state = ElevatorState.MOVING_DOWN
-                    # TODO trigger animation
                     await asyncio.sleep(self.floor_travel_duration)
                     self.current_floor -= 1
 
@@ -658,7 +663,6 @@ class Elevator:
                     # logger.debug(f"Elevator {self.id}: Waiting for door to close")
                     # await self.door_idle_event.wait()  # wait for the door to close
 
-                self.target_floor_processed.set()
                 self._moving_timestamp = None
 
                 # Signal that the floor as arrived
@@ -802,12 +806,7 @@ class Elevator:
 
         self.exit_event.set()
 
-        tasks = (self.door_loop_task, self.move_loop_task)
-        for t in tasks:
-            t.cancel()
-
-        for t in tasks:
-            await t
+        await cancel((self.door_loop_task, self.move_loop_task))
 
     @property
     def moving_direction(self) -> Direction:
@@ -923,120 +922,167 @@ class Elevator:
     def directed_floor(self) -> FloorAction:
         return FloorAction(self.current_floor, self.committed_direction)
 
-    def _calculate_arrival_time(self, target_floor: FloorLike, requested_direction: Direction) -> float:
+    @overload
+    def estimate_total_duration(self) -> float:
         """
-        Calculate the estimated arrival time for a specific floor.
-        This calls estimate_total_time and adjusts for the specific target floor.
+        Estimate the total time for all actions in the elevator's target floor chains.
         """
-        # Now simulate adding this target floor
-        chains_copy = copy(self.target_floor_chains)
-        target_floor = Floor(target_floor)
+        ...
 
-        # Determine which chain to add the target floor in simulation
-        target_direction = self.direction_to(target_floor)
-        chain = chains_copy.select_chain(requested_direction, target_direction)
-
-        # Add the floor to the simulated chain
-        chain.add(target_floor, requested_direction)
-
-        # Calculate total time with the new floor added
-        new_total_time = self.estimate_total_time(chains_copy)
-
-        # If this is going to the current chain, the arrival time is just the time to get there
-        if chain == chains_copy.current_chain:
-            # Find position of the target in the chain
-            position = -1
-            for i, action in enumerate(chain):
-                if action.floor == target_floor and action.direction == requested_direction:
-                    position = i
-                    break
-
-            if position >= 0:
-                # Calculate time to reach this position
-                current_pos = self.current_position
-                floors_to_target = 0.0
-                stops_before_target = 0
-
-                for i, action in enumerate(chain):
-                    if i == position:
-                        break
-                    floors_to_target += abs(action.floor - current_pos)
-                    stops_before_target += 1
-                    current_pos = action.floor
-
-                # Add time to target floor
-                floors_to_target += abs(target_floor - current_pos)
-
-                # Calculate time
-                if self.state.is_moving():
-                    arrival_time = self.door_move_duration
-                else:
-                    arrival_time = self.estimate_door_close_time() + self.door_move_duration
-
-                arrival_time += self.calculate_duration(floors_to_target, stops_before_target)
-                return arrival_time
-
-        # Otherwise return the difference between the two totals
-        # This is an approximation that works well enough
-        return new_total_time
-
-    def estimate_total_time(self, chains: TargetFloorChains | None = None, target_action: FloorAction | None = None) -> float:
+    @overload
+    def estimate_total_duration(self, directed_request: FloorAction) -> float:
         """
-        Estimate the total time needed to complete all currently planned stops.
-        More efficient than calculating for each floor separately.
+        Estimate the total time for all actions in the elevator's target floor chains after adding a new directed request.
         """
-        if chains is None:
-            chains = self.target_floor_chains
+        ...
 
-        # Start with time to get door closed if needed
-        if not self.state.is_moving() and self.state != ElevatorState.STOPPED_DOOR_CLOSED:
-            total_time = self.estimate_door_close_time()
-        else:
-            total_time = 0.0
+    def estimate_total_duration(self, directed_request: FloorAction | None = None) -> float:
+        duration = 0.0
+        if directed_request is None:
+            if not self.state.is_moving():
+                duration += self.estimate_door_close_time()
 
-        # If no planned stops, return immediate time
-        if chains.is_empty():
-            return total_time
+            n_floors, n_stops = self.target_floor_chains.get_metric(self.current_position)
+            duration += self.calculate_duration(n_floors, n_stops)
+            return duration
 
-        # Calculate time needed for all planned floors
-        current_pos = self.current_position
-        total_floors = 0.0
-        total_stops = 0
-
-        if target_action is None:
-            target_action = chains.bottom()
-
-        # Simulate the elevator journey through all chains
-        for action in chains:
-            total_floors += abs(action.floor - current_pos)
-            current_pos = action.floor
-            if action == target_action:
-                # If we reached the target action, we can stop here
-                break
-            total_stops += 1
-
-        # Add travel time for all floors and stops
-        total_time += self.calculate_duration(total_floors, total_stops)
-
-        return total_time
-
-    def estimate_arrival_time(self, target_floor: FloorLike, requested_direction: Direction) -> float:
-        """
-        Estimate arrival time for a floor that may not be committed yet.
-        Uses the cached values when available or calculates based on total time estimate.
-        """
-        target_floor = Floor(target_floor)
-        directed_floor = FloorAction(target_floor, requested_direction)
-
-        target_direction = self.direction_to(target_floor)
-        chain_copy = copy(self.target_floor_chains)
-        chain_copy.add(directed_floor, target_direction=target_direction)
+        assert isinstance(directed_request, FloorAction)
+        target_floor, requested_direction = directed_request
 
         # Special case: Already at requested floor
         if target_floor == self.current_floor and self.committed_direction in (requested_direction, Direction.IDLE) and not self.state.is_moving():
-            return self.estimate_door_open_time()
+            duration += self.estimate_door_open_time() + self.door_stay_duration + self.door_move_duration
 
-        return self.estimate_total_time(chain_copy, target_action=directed_floor) + self.door_move_duration
+            if self.target_floor_chains.is_empty():
+                # No further actions, just return the door open time
+                return duration
+
+            n_floors, n_stops = self.target_floor_chains.get_metric(self.current_position)
+            duration += self.calculate_duration(n_floors, n_stops)
+            return duration
+
+        # If not at requested floor, add the target floor to the chain
+        target_direction = self.direction_to(target_floor)
+        chain_copy = copy(self.target_floor_chains)
+        chain_copy.add(directed_request, target_direction=target_direction)
+
+        # If not at requested floor, estimate time to reach it
+        if not self.state.is_moving():
+            duration += self.estimate_door_close_time()
+
+        n_floors, n_stops = chain_copy.get_metric(self.current_position)
+
+        # Add travel time for all floors and stops
+        duration += self.calculate_duration(n_floors, n_stops)
+        return duration
+
+
+class Elevators(dict[ElevatorId, Elevator]):
+    """
+    A collection of elevators, indexed by their IDs.
+    Provides methods to manage and interact with multiple elevators.
+    """
+
+    def __init__(
+        self,
+        count: int,
+        queue: asyncio.Queue,
+        floor_travel_duration: float,
+        accelerate_duration: float,
+        door_move_duration: float,
+        door_stay_duration: float,
+    ):
+        self.update({
+            i: Elevator(
+                id=i,
+                queue=queue,
+                floor_travel_duration=floor_travel_duration,
+                accelerate_duration=accelerate_duration,
+                door_move_duration=door_move_duration,
+                door_stay_duration=door_stay_duration,
+            )
+            for i in range(1, count + 1)
+        })
+        self.eid2request: dict[ElevatorId, set[FloorAction]] = {e.id: set() for e in self.values()}
+        self.request2eid: dict[FloorAction, ElevatorId] = {}
+
+    def reassign(self, assignment: dict[ElevatorId, set[FloorAction]]) -> Self:
+        """
+        Apply a new assignment of requests to elevators.
+        """
+        events = {}
+
+        # Step 1: Cancel all requests in current assignment that are not in new assignment
+        for eid, requests_set in self.eid2request.items():
+            for request in requests_set:
+                if request not in assignment[eid]:
+                    event = self[eid].cancel_commit(*request)
+                    assert event is not None
+                    events[request] = event
+
+        # Step 2: Commit new requests to elevators
+        for eid, requests_set in assignment.items():
+            for request in requests_set:
+                if request not in self.eid2request[eid]:
+                    self[eid].commit_floor(*request, event=events.pop(request))
+
+        # Ensure all events were properly handled
+        assert len(events) == 0
+
+        self.eid2request.update(assignment)
+        self.request2eid = {request: eid for eid, requests in self.eid2request.items() for request in requests}
+
+        return self
+
+    def copy(self) -> Self:
+        c = self.__new__(self.__class__)
+        c.update({eid: elevator.copy() for eid, elevator in self.items()})
+        c.eid2request = self.eid2request.copy()
+        c.request2eid = self.request2eid.copy()
+        return c
+
+    def commit_floor(self, eid: ElevatorId, request: FloorAction) -> asyncio.Event:
+        self.request2eid[request] = eid
+        self.eid2request[eid].add(request)
+        return self[eid].commit_floor(*request)
+
+    def cancel_commit(self, request: FloorAction) -> asyncio.Event | None:
+        eid = self.request2eid.pop(request)
+        self.eid2request[eid].remove(request)
+        return self[eid].cancel_commit(*request)
+
+    @property
+    def requests(self) -> set[FloorAction]:
+        return set(self.request2eid.keys())
+
+    @property
+    def eids(self) -> set[ElevatorId]:
+        return set(self.keys())
+
+    def _plan_to_assignment(self, plan: tuple[ElevatorId, ...]) -> dict[ElevatorId, set[FloorAction]]:
+        """
+        Convert a plan to an assignment of requests to elevators.
+        """
+        assert len(plan) == len(self.request2eid)
+
+        assignment: dict[ElevatorId, set[FloorAction]] = {eid: set() for eid in self.eids}
+        for eid, request in zip(plan, self.request2eid.keys()):
+            assignment[eid].add(request)
+        return assignment
+
+    @property
+    def all_possible_assignments(self) -> Iterable[dict[ElevatorId, set[FloorAction]]]:
+        return map(self._plan_to_assignment, combinations_with_replacement(self.eids, len(self.request2eid)))
+
+    def estimate_total_duration(self, directed_request: FloorAction) -> tuple[ElevatorId, float]:
+        """
+        Estimate the total duration for all elevators based on their current state and requests.
+
+        Returns a tuple of the best elevator ID and the estimated total duration.
+        """
+        durations = {eid: elevator.estimate_total_duration() for eid, elevator in self.items()}
+        durations = {target_eid: max(e.estimate_total_duration(directed_request) if e.id == target_eid else durations[e.id] for e in self.values()) for target_eid in self.eids}
+        return min(durations.items(), key=lambda x: x[1])
 
 
 if __name__ == "__main__":

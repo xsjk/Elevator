@@ -10,6 +10,8 @@ from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
 
+import logging
+
 
 class ThemeManager(QObject):
     """Manage app themes and detect system changes"""
@@ -82,9 +84,9 @@ class ThemeManager(QObject):
                 self._theme_cache[name] = content
                 return content
             except Exception as e:
-                print(f"Error loading {path}: {e}")
+                logging.error(f"ThemeManager: Error loading {path}: {e}")
         else:
-            print(f"Warning: {path} not found")
+            logging.warning(f"ThemeManager: Theme file {path} not found")
         return ""
 
     def get_theme_styles(self, theme_name: Optional[str] = None) -> str:

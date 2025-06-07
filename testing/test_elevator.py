@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from common import Direction, DoorDirection, Elevator, ElevatorState, FloorAction
+from common import Direction, DoorDirection, Elevator, ElevatorState, FloorAction, TargetFloors
 
 
 class TestElevator(unittest.IsolatedAsyncioTestCase):
@@ -90,8 +90,7 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
     async def test_cancel_commit(self):
         event = self.elevator.commit_floor(4, Direction.UP)
         self.elevator.cancel_commit(4, Direction.UP)
-        await event.wait()
-        self.assertTrue(event.is_set())
+        self.assertTrue(not event.is_set())
 
     async def test_arrival_summary(self):
         self.elevator.current_floor = 1
@@ -360,21 +359,28 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         expected = 3 * self.elevator.floor_travel_duration + 2 * (self.elevator.door_move_duration * 2 + self.elevator.door_stay_duration)
         self.assertEqual(duration, expected)
 
-    async def test_estimate_arrival_time_cases(self):
+    async def test_estimate_total_duration(self):
         # Test Case 1: Same floor, IDLE
         self.elevator.current_floor = 1
-        t = self.elevator.estimate_arrival_time(1, Direction.IDLE)
-        self.assertAlmostEqual(t, self.elevator.door_move_duration)
+        self.assertAlmostEqual(
+            self.elevator.estimate_total_duration(FloorAction(1, Direction.IDLE)),
+            sum((
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+            )),
+        )
 
         # Test Case 2: Target floor is above, 3 floors away, no stops
         self.elevator.current_floor = 1
-        t = self.elevator.estimate_arrival_time(4, Direction.UP)
         self.assertAlmostEqual(
-            t,
+            self.elevator.estimate_total_duration(FloorAction(4, Direction.UP)),
             sum((
-                self.elevator.floor_travel_duration,
-                self.elevator.floor_travel_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 1 -> 2
+                self.elevator.floor_travel_duration,  # 2 -> 3
+                self.elevator.floor_travel_duration,  # 3 -> 4
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
             )),
         )
@@ -388,21 +394,20 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
         self.elevator.commit_floor(4, Direction.DOWN)
         await asyncio.sleep(0.01)
-
         self.assertEqual(self.elevator.current_floor, 5)
-
-        t = self.elevator.estimate_arrival_time(3, Direction.DOWN)
         self.assertAlmostEqual(
-            t,
+            self.elevator.estimate_total_duration(FloorAction(3, Direction.DOWN)),
             sum((
                 self.elevator.door_move_duration,
                 self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 5 -> 4
                 self.elevator.door_move_duration,
                 self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 4 -> 3
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
             )),
             delta=0.1,
@@ -415,16 +420,17 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         await self.elevator.commit_door(DoorDirection.CLOSE)
         self.assertEqual(self.elevator.state, ElevatorState.CLOSING_DOOR)
         self.assertEqual(self.elevator.current_floor, 5)
-
         self.assertAlmostEqual(
-            self.elevator.estimate_arrival_time(3, Direction.DOWN),
+            self.elevator.estimate_total_duration(FloorAction(3, Direction.DOWN)),
             sum((
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 5 -> 4
                 self.elevator.door_move_duration,
                 self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 4 -> 3
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
             )),
             delta=0.1,
@@ -435,15 +441,21 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
 
         self.elevator.commit_floor(2, Direction.DOWN)
         await asyncio.sleep(0.01)
-
+        self.assertEqual(self.elevator.current_floor, 5)
         self.assertAlmostEqual(
-            self.elevator.estimate_arrival_time(3, Direction.DOWN),
+            self.elevator.estimate_total_duration(FloorAction(3, Direction.DOWN)),
             sum((
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 5 -> 4
                 self.elevator.door_move_duration,
                 self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 4 —> 3
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,  # 3 -> 2
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
             )),
             delta=0.1,
@@ -454,21 +466,160 @@ class TestElevator(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.elevator.current_floor, 4)
 
         self.assertAlmostEqual(
-            self.elevator.estimate_arrival_time(3, Direction.UP),
+            self.elevator.estimate_total_duration(FloorAction(3, Direction.UP)),
             sum((
                 self.elevator.door_move_duration,
                 self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 4 -> 3
+                self.elevator.floor_travel_duration,  # 3 -> 2
                 self.elevator.door_move_duration,
                 self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
-                self.elevator.floor_travel_duration,
+                self.elevator.floor_travel_duration,  # 2 -> 3
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
                 self.elevator.door_move_duration,
             )),
             delta=0.1,
         )
+
+    async def test_target_floors_behavior(self):
+        """Test the basic behavior of TargetFloors class."""
+        # Create a new TargetFloors instance with UP direction
+        target_floors = TargetFloors(Direction.UP)
+        self.assertEqual(target_floors.direction, Direction.UP)
+
+        # Add floors and check ordering
+        target_floors.add(3, Direction.UP)
+        target_floors.add(5, Direction.UP)
+        target_floors.add(2, Direction.IDLE)
+
+        # Check ordering (floors should be sorted in ascending order for UP direction)
+        self.assertEqual([f.floor for f in target_floors], [2, 3, 5])
+
+        # Test top and bottom methods
+        self.assertEqual(target_floors.top().floor, 2)
+        self.assertEqual(target_floors.bottom().floor, 5)
+
+        # Test remove method
+        target_floors.remove(FloorAction(3, Direction.UP))
+        self.assertEqual(len(target_floors), 2)
+        self.assertEqual([f.floor for f in target_floors], [2, 5])
+
+        # Test nonemptyEvent
+        self.assertTrue(target_floors.nonemptyEvent.is_set())
+        target_floors.pop(0)
+        target_floors.pop(0)
+        self.assertFalse(target_floors.nonemptyEvent.is_set())
+
+        # Test direction change constraints
+        with self.assertRaises(AssertionError):
+            target_floors.add(4, Direction.DOWN)  # Should fail with wrong direction
+
+    async def test_target_chains_swap(self):
+        """Test the chain swapping mechanism in TargetFloorChains."""
+        # Setup the elevator with specific target chains
+        self.elevator.target_floor_chains.direction = Direction.UP
+
+        # Add floors to different chains
+        self.elevator.target_floor_chains.current_chain.add(3, Direction.UP)
+        self.elevator.target_floor_chains.next_chain.add(2, Direction.DOWN)
+        self.elevator.target_floor_chains.future_chain.add(5, Direction.UP)
+
+        # Initial state verification
+        self.assertEqual(self.elevator.target_floor_chains.direction, Direction.UP)
+        self.assertEqual(len(self.elevator.target_floor_chains.current_chain), 1)
+        self.assertEqual(len(self.elevator.target_floor_chains.next_chain), 1)
+        self.assertEqual(len(self.elevator.target_floor_chains.future_chain), 1)
+        self.assertEqual(len(self.elevator.target_floor_chains), 3)
+
+        # Pop the current chain item
+        action = self.elevator.target_floor_chains.pop()
+        self.assertEqual(action, FloorAction(3, Direction.UP))
+
+        # After pop, chains should have swapped
+        self.assertEqual(self.elevator.target_floor_chains.direction, Direction.UP)
+        self.assertEqual(len(self.elevator.target_floor_chains.current_chain), 0)
+        self.assertEqual(len(self.elevator.target_floor_chains.next_chain), 1)
+        self.assertEqual(len(self.elevator.target_floor_chains.future_chain), 1)
+
+        # Verify the next chain has the popped item
+        action = self.elevator.target_floor_chains.pop()
+        self.assertEqual(action, FloorAction(2, Direction.DOWN))
+
+        # After pop, the next chain should become the current chain
+        self.assertEqual(self.elevator.target_floor_chains.direction, Direction.DOWN)
+        self.assertEqual(len(self.elevator.target_floor_chains.current_chain), 0)
+        self.assertEqual(len(self.elevator.target_floor_chains.next_chain), 1)
+        self.assertEqual(len(self.elevator.target_floor_chains.future_chain), 0)
+
+    async def test_travel_time_estimation_precision(self):
+        """Test the precision of travel time estimations."""
+        self.elevator.current_floor = 1
+
+        # Test estimation for a simple up movement
+        self.assertAlmostEqual(
+            self.elevator.estimate_total_duration(FloorAction(3, Direction.UP)),
+            sum((
+                self.elevator.floor_travel_duration,  # 1 -> 2
+                self.elevator.floor_travel_duration,  # 2 -> 3
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+            )),
+        )
+
+        # Test estimation with multiple stops
+        self.elevator.commit_floor(2, Direction.UP)
+        self.assertAlmostEqual(
+            self.elevator.estimate_total_duration(FloorAction(5, Direction.UP)),
+            sum((
+                self.elevator.floor_travel_duration,  # 1 -> 2
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+                self.elevator.floor_travel_duration,  # 2 -> 3
+                self.elevator.floor_travel_duration,  # 3 -> 4
+                self.elevator.floor_travel_duration,  # 4 -> 5
+                self.elevator.door_move_duration,
+                self.elevator.door_stay_duration,
+                self.elevator.door_move_duration,
+            )),
+        )
+
+    async def test_cancel_and_recommit(self):
+        """Test cancelling a floor request and then recommitting it."""
+        # Commit a floor
+        event = self.elevator.commit_floor(4, Direction.UP)
+        self.assertIn(FloorAction(4, Direction.UP), self.elevator.target_floor_chains)
+
+        # Cancel the commitment
+        self.elevator.cancel_commit(4, Direction.UP)
+        self.assertNotIn(FloorAction(4, Direction.UP), self.elevator.target_floor_chains)
+        self.assertFalse(event.is_set())
+
+        # Recommit the same floor
+        new_event = self.elevator.commit_floor(4, Direction.UP)
+        self.assertIn(FloorAction(4, Direction.UP), self.elevator.target_floor_chains)
+        self.assertIsNot(event, new_event)  # Should be a different event
+
+    async def test_elevator_idle_behavior(self):
+        """Test how the elevator behaves when idle."""
+        # Ensure elevator is idle
+        self.elevator.target_floor_chains.clear()
+        self.assertEqual(self.elevator.committed_direction, Direction.IDLE)
+
+        # Commit a floor and verify direction change
+        self.elevator.commit_floor(3, Direction.DOWN)
+        self.assertEqual(self.elevator.committed_direction, Direction.DOWN)
+
+        # Clear and test with a different direction
+        self.elevator.target_floor_chains.clear()
+        self.assertEqual(self.elevator.committed_direction, Direction.IDLE)
+
+        self.elevator.commit_floor(5, Direction.UP)
+        self.assertEqual(self.elevator.committed_direction, Direction.UP)
 
 
 if __name__ == "__main__":

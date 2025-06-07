@@ -184,7 +184,7 @@ class TestGeneratePassengers(unittest.TestCase):
         queue = asyncio.Queue()
         passengers = generate_passengers(5, queue)
 
-        expected_names = ["P_1", "P_2", "P_3", "P_4", "P_5"]
+        expected_names = ["P1", "P2", "P3", "P4", "P5"]
         names = [p.name for p in passengers]
         self.assertEqual(set(names), set(expected_names))
 

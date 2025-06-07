@@ -3,17 +3,9 @@ import inspect
 from dataclasses import dataclass, field
 from typing import AsyncGenerator
 
-from ..utils.common import (
-    Direction,
-    DoorDirection,
-    ElevatorId,
-    Event,
-    Floor,
-    FloorAction,
-    FloorLike,
-)
+from ..utils.common import Direction, DoorDirection, ElevatorId, Event, Floor, FloorAction, FloorLike, Strategy
 from ..utils.event_bus import event_bus
-from .elevator import Elevator, logger
+from .elevator import Elevator, Elevators, logger
 
 
 @dataclass
@@ -25,28 +17,28 @@ class Config:
     floors: tuple[str, ...] = ("-1", "1", "2", "3")  # Floors in the building
     default_floor: Floor = Floor(1)  # Default floor to start from
     elevator_count: int = 2  # Number of elevators in the building
+    strategy: Strategy = Strategy.OPTIMAL
+
+
+type assignmentType = dict[ElevatorId, set[FloorAction]]  # Type alias for assignment dictionary
 
 
 @dataclass
 class Controller:
     config: Config = field(default_factory=Config)
-    requests: set[FloorAction] = field(default_factory=set)  # External elevator call requests
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue for inter-component communication
     message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)  # Tasks for handling messages, each task should handle asyncio.CancelledError in its implementation
     _started: bool = False  # Flag to indicate if the controller has been started
 
     def __post_init__(self):
-        self.elevators = {
-            i: Elevator(
-                id=i,
-                queue=self.queue,
-                floor_travel_duration=self.config.floor_travel_duration,
-                accelerate_duration=self.config.accelerate_duration,
-                door_move_duration=self.config.door_move_duration,
-                door_stay_duration=self.config.door_stay_duration,
-            )
-            for i in range(1, self.config.elevator_count + 1)
-        }
+        self.elevators = Elevators(
+            count=self.config.elevator_count,
+            queue=self.queue,
+            floor_travel_duration=self.config.floor_travel_duration,
+            accelerate_duration=self.config.accelerate_duration,
+            door_move_duration=self.config.door_move_duration,
+            door_stay_duration=self.config.door_stay_duration,
+        )
 
     def set_config(self, **kwargs):
         for key, value in kwargs.items():
@@ -74,6 +66,9 @@ class Controller:
         if count < len(self.elevators):
             for i in range(count + 1, len(self.elevators) + 1):
                 e = self.elevators.pop(i)
+                requests = self.elevators.eid2request.pop(e.id)
+                # TODO: call elevators
+                logger.warning(f"Requests {requests} for elevator {e.id} will be lost, elevator will be stopped")
                 if e.started:
                     self.event_loop.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
 
@@ -88,6 +83,7 @@ class Controller:
                     door_move_duration=self.config.door_move_duration,
                     door_stay_duration=self.config.door_stay_duration,
                 )
+                self.elevators.eid2request[i] = set()
                 if self._started:
                     self.elevators[i].start()
 
@@ -101,6 +97,10 @@ class Controller:
 
     async def reset(self):
         await self.stop()
+
+        assert len(self.elevators.requests) == 0
+        for actions in self.elevators.eid2request.values():
+            assert len(actions) == 0
 
         # Empty the queue
         while not self.queue.empty():
@@ -143,7 +143,7 @@ class Controller:
 
         await asyncio.wait(tasks + [asyncio.create_task(e.stop()) for e in self.elevators.values()])
 
-        assert len(self.requests) == 0
+        assert len(self.elevators.requests) == 0
         for e in self.elevators.values():
             assert len(e.selected_floors) == 0
 
@@ -220,32 +220,82 @@ class Controller:
         while True:
             yield await self.get_event_message()
 
+    def optimal_reassign(self, request: FloorAction) -> ElevatorId:
+        """
+        Find the optimal assignment of elevators to floor requests.
+        Uses a combinatorial approach to evaluate different assignments.
+
+        Args:
+            directed_target: The new floor request to be considered
+        """
+
+        # Create a copy of elevators for simulation
+        elevators = self.elevators.copy()
+
+        # Find the best assignment plan by evaluating all possible combinations
+        # Calculate the best assignment based on the total time
+
+        best_elevator_id = None
+        best_assignment: assignmentType = {}
+        best_total_time = float("inf")
+        for assignment in self.elevators.all_possible_assignments:
+            # Apply the current assignment to the elevators
+            elevators.reassign(assignment)
+            eid, duration = elevators.estimate_total_duration(request)
+
+            # Check if this is the best assignment found so far
+            if duration < best_total_time:
+                best_total_time = duration
+                best_elevator_id = eid
+                best_assignment = assignment
+
+        assert best_elevator_id is not None
+
+        # Check if current assignment is already optimal
+        if best_assignment == self.elevators.eid2request:
+            logger.info("Controller: Current assignment is already optimal")
+        else:
+            # Apply changes to real elevators
+            self.elevators.reassign(best_assignment)
+
+            logger.info(f"Controller: Optimized elevator assignments: {best_assignment}")
+
+        return best_elevator_id
+
+    def assign_elevators(self, request: FloorAction) -> ElevatorId:
+        match self.config.strategy:
+            case Strategy.GREEDY:
+                return min(self.elevators, key=lambda i: self.elevators[i].estimate_total_duration(request))
+            case Strategy.OPTIMAL:
+                # Optimal strategy: reassign elevators based on the optimal assignment
+                return self.optimal_reassign(request)
+
+            case _:
+                raise ValueError(f"Controller: Invalid strategy {self.config.strategy}")
+
     async def call_elevator(self, call_floor: FloorLike, call_direction: Direction):
         call_floor = Floor(call_floor)
         assert call_direction in (Direction.UP, Direction.DOWN)
+        directed_target = FloorAction(call_floor, call_direction)
 
         # Check if the call direction is already requested
-        if (call_floor, call_direction) in self.requests:
+        if (call_floor, call_direction) in self.elevators.requests:
             logger.info(f"Controller: Floor {call_floor} already requested {call_direction.name.lower()}")
             return
 
         logger.info(f"Controller: Calling elevator: Floor {call_floor}, Direction {call_direction.name.lower()}")
 
-        # Choose the best elevator (always choose the one that takes the shorter arrival time among those that are already started)
-        elevator = min(filter(lambda e: e.started, self.elevators.values()), key=lambda e: e.estimate_arrival_time(call_floor, call_direction))
-        logger.info(f"Controller: Elevator {elevator.id} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
-        directed_target_floor = FloorAction(call_floor, call_direction)
+        eid = self.assign_elevators(directed_target)
+        logger.info(f"Controller: Elevator {eid} selected for call at Floor {call_floor} going {call_direction.name.lower()}")
 
         try:
-            self.requests.add(directed_target_floor)
-            await elevator.commit_floor(call_floor, call_direction).wait()
+            await self.elevators.commit_floor(eid, directed_target).wait()
             event_bus.publish(Event.CALL_COMPLETED, call_floor, call_direction)
         except asyncio.CancelledError as e:
             if str(e) != "cancel":
                 raise asyncio.CancelledError from e
         finally:
-            self.requests.remove(directed_target_floor)
-            elevator.cancel_commit(call_floor, call_direction)
+            self.elevators.cancel_commit(directed_target)
 
     async def cancel_call(self, call_floor: FloorLike, call_direction: Direction):
         call_floor = Floor(call_floor)
@@ -253,14 +303,14 @@ class Controller:
 
         directed_target_floor = FloorAction(call_floor, call_direction)
         key = f"call_{call_direction.name.lower()}@{call_floor}"
-        assert directed_target_floor in self.requests
+        assert directed_target_floor in self.elevators.requests
         assert key in self.message_tasks
 
         # Cancel the task associated with the elevator call
         t = self.message_tasks[key]
         t.cancel("cancel")
         await t
-        assert directed_target_floor not in self.requests
+        assert directed_target_floor not in self.elevators.requests
 
     async def select_floor(self, floor: FloorLike, elevator_id: ElevatorId):
         floor = Floor(floor)

@@ -69,7 +69,7 @@ class ConfigDialog(QDialog):
 
         # Elevator count configuration
         self.elevator_count_spinbox = QSpinBox()
-        self.elevator_count_spinbox.setRange(1, 10)
+        self.elevator_count_spinbox.setRange(1, 6)
         self.elevator_count_spinbox.setValue(current_config.elevator_count)
         self.elevator_count_spinbox.setMinimumWidth(120)
         self.elevator_count_label = QLabel()

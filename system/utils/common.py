@@ -1,5 +1,6 @@
+import asyncio
 from enum import IntEnum, auto
-from typing import Self, overload
+from typing import Iterable, Self, overload
 
 
 class Event(IntEnum):
@@ -164,6 +165,25 @@ class FloorAction(tuple[Floor, Direction]):
     @property
     def direction(self) -> Direction:
         return self[1]
+
+
+class Strategy(IntEnum):
+    GREEDY = auto()
+    OPTIMAL = auto()
+
+
+async def cancel(tasks: Iterable[asyncio.Task], *, message: str = "exit") -> None:
+    error: asyncio.CancelledError | None = None
+    for task in tasks:
+        if not task.done():
+            task.cancel(message)
+            try:
+                await task
+            except asyncio.CancelledError as e:
+                if str(e) != message:
+                    error = e
+    if error:
+        raise error
 
 
 if __name__ == "__main__":
