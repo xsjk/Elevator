@@ -1,0 +1,1046 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+const int N = 2;
+const int num = 3;
+const int door_move_time = 1;
+const int door_stay_time = 2;
+const int floor_travel_time = 2;
+
+// Floor: 0, 1, 2, 3
+// Direction: 0:up 1:down 2:idle
+// ElevatorState: 0:moving_up 1:moving_down 2:stopped_door_closed 3:stopped_door_opened 4:opening_door 5:closing_door
+// DoorState: 0:opened 1:closed 2:opening 3:closing
+typedef int[0,N-1] ElevatorID;
+typedef int[0,num-1] UserID;
+typedef int[0, 3] Floor;
+typedef int[0, 2] Direction;
+typedef int[0, 5] ElevatorState;
+
+bool door_idle_event[N] = {true, true};
+ElevatorState Ele_state[N] = {2, 2};
+Floor Ele_cur_floor[N] = {1, 1};
+Direction Ele_direction[N] = {2, 2};
+
+typedef bool Targets[4];
+Targets up_floors[N] = {{false, false, false, false}, {false, false, false, false}};
+Targets down_floors[N] = {{false, false, false, false}, {false, false, false, false}};
+
+broadcast chan open_door[N], close_door[N];
+
+int door_time[N] = {0, 0};
+int Ele_time[N] = {0, 0};
+
+Floor user_floor[num];
+Floor user_to[num];
+ElevatorID user_elevator[num];
+</declaration>
+	<template>
+		<name>Elevator</name>
+		<parameter>ElevatorID id</parameter>
+		<declaration>clock t;
+int i;
+void check(Floor check_floor){
+    int check_dir = Ele_direction[id];
+    if (check_dir == 1){
+        for (i = check_floor - 1; i &gt;= 0; i--){
+            if (down_floors[id][i] == true){
+                return;
+            }
+        }
+        for (i = 0; i &lt; 4; i++){
+            if (up_floors[id][i] == true){
+                if (i &lt; check_floor){
+                    down_floors[id][i] = true;
+                    return;
+                }else if (i == check_floor){
+                    up_floors[id][i] = false;
+                    Ele_direction[id] = 0;
+                    //return;
+                }else if (i &gt; check_floor){
+                    Ele_direction[id] = 0;
+                    return;
+                }
+            }
+        }
+        for (i = 3; i &gt; check_floor; i--){
+            if (down_floors[id][i] == true){
+                up_floors[id][i] = true;
+                Ele_direction[id] = 0;
+                return;
+            }
+        }
+        Ele_direction[id] = 2;
+
+    }else{ // check_dir == 0 or 2
+        for (i = check_floor + 1; i &lt; 4; i++){
+            if (up_floors[id][i] == true){
+                Ele_direction[id] = 0;
+                return;
+            }
+        }
+        for (i = 3; i &gt;= 0; i--){
+            if (down_floors[id][i] == true){
+                if (i &gt; check_floor){
+                    up_floors[id][i] = true;
+                    Ele_direction[id] = 0;
+                    return;
+                }else if (i == check_floor){
+                    down_floors[id][i] = false;
+                    Ele_direction[id] = 1;
+                    //return;
+                }else if (i &lt; check_floor){
+                    Ele_direction[id] = 1;
+                    return;
+                }
+            }
+        }
+        for (i = 0; i &lt;= check_floor; i++){
+            if (up_floors[id][i] == true){
+                down_floors[id][i] = true;
+                Ele_direction[id] = 1;
+                return;
+            }
+        }
+        Ele_direction[id] = 2;
+    }
+    return;
+}</declaration>
+		<location id="id0" x="-93" y="467">
+			<name x="-119" y="425">Floor1</name>
+			<label kind="invariant" x="-136" y="441">t&lt;=1</label>
+		</location>
+		<location id="id1" x="-93" y="782">
+			<name x="-119" y="739">Floor0</name>
+			<label kind="invariant" x="-144" y="756">t&lt;=1</label>
+		</location>
+		<location id="id2" x="-93" y="714">
+			<name x="-119" y="671">check01</name>
+			<committed/>
+		</location>
+		<location id="id3" x="-93" y="221">
+			<name x="-119" y="179">check12</name>
+			<committed/>
+		</location>
+		<location id="id4" x="-93" y="8">
+			<name x="-119" y="-34">Floor2</name>
+			<label kind="invariant" x="-136" y="-17">t&lt;=1</label>
+		</location>
+		<location id="id5" x="-93" y="-230">
+			<name x="-119" y="-264">ckeck23</name>
+			<committed/>
+		</location>
+		<location id="id6" x="-93" y="-306">
+			<name x="-119" y="-340">Floor3</name>
+			<label kind="invariant" x="-144" y="-323">t&lt;=1</label>
+		</location>
+		<location id="id7" x="-663" y="714">
+			<name x="-723" y="689">UpTo1</name>
+			<label kind="invariant" x="-731" y="714">t &lt;= 1</label>
+		</location>
+		<location id="id8" x="-654" y="220">
+			<name x="-714" y="195">UpTo2</name>
+			<label kind="invariant" x="-722" y="220">t &lt;= 1</label>
+		</location>
+		<location id="id9" x="-663" y="-230">
+			<name x="-723" y="-255">UpTo3</name>
+			<label kind="invariant" x="-731" y="-238">t &lt;= 1</label>
+		</location>
+		<location id="id10" x="510" y="-230">
+			<name x="544" y="-238">DownTo2</name>
+			<label kind="invariant" x="544" y="-221">t &lt;= 1</label>
+		</location>
+		<location id="id11" x="518" y="220">
+			<name x="543" y="203">DownTo1</name>
+			<label kind="invariant" x="544" y="220">t &lt;= 1</label>
+		</location>
+		<location id="id12" x="510" y="714">
+			<name x="527" y="697">DownTo0</name>
+			<label kind="invariant" x="527" y="722">t &lt;= 1</label>
+		</location>
+		<location id="id13" x="-382" y="-230">
+			<committed/>
+		</location>
+		<location id="id14" x="-382" y="220">
+			<committed/>
+		</location>
+		<location id="id15" x="212" y="714">
+			<committed/>
+		</location>
+		<location id="id16" x="212" y="-230">
+			<committed/>
+		</location>
+		<location id="id17" x="212" y="220">
+			<committed/>
+		</location>
+		<location id="id18" x="-348" y="714">
+			<committed/>
+		</location>
+		<location id="id19" x="93" y="8">
+			<committed/>
+		</location>
+		<location id="id20" x="102" y="467">
+			<committed/>
+		</location>
+		<location id="id21" x="51" y="-425">
+			<committed/>
+		</location>
+		<location id="id22" x="-229" y="892">
+			<committed/>
+		</location>
+		<init ref="id0"/>
+		<transition id="id23">
+			<source ref="id22"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-450" y="850">Ele_direction[id]==2 || door_idle_event[id]==false</label>
+			<nail x="-229" y="782"/>
+		</transition>
+		<transition id="id24">
+			<source ref="id22"/>
+			<target ref="id7"/>
+			<label kind="guard" x="-765" y="756">Ele_direction[id]==0 &amp;&amp; door_idle_event[id]==true</label>
+			<label kind="assignment" x="-569" y="773">Ele_state[id]=0,
+t=0,
+up_floors[id][0]=false</label>
+		</transition>
+		<transition id="id25">
+			<source ref="id1"/>
+			<target ref="id22"/>
+			<label kind="guard" x="-178" y="799">t&gt;=1</label>
+			<label kind="assignment" x="-178" y="816">t=0,
+check(0)</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id21"/>
+			<target ref="id6"/>
+			<label kind="guard" x="-127" y="-306">Ele_direction[id]==2 || door_idle_event[id]==false</label>
+			<nail x="51" y="-306"/>
+		</transition>
+		<transition id="id27">
+			<source ref="id21"/>
+			<target ref="id10"/>
+			<label kind="guard" x="68" y="-400">Ele_direction[id]==1 &amp;&amp; door_idle_event[id]==true</label>
+			<label kind="assignment" x="263" y="-374">Ele_state[id]=1,
+t=0,
+down_floors[id][3]=false</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id6"/>
+			<target ref="id21"/>
+			<label kind="guard" x="-59" y="-408">t&gt;=1</label>
+			<label kind="assignment" x="-59" y="-391">t=0,
+check(3)</label>
+		</transition>
+		<transition id="id29">
+			<source ref="id20"/>
+			<target ref="id0"/>
+			<label kind="guard" x="-161" y="509">Ele_direction[id]==2 || door_idle_event[id]==false</label>
+			<nail x="8" y="560"/>
+		</transition>
+		<transition id="id30">
+			<source ref="id20"/>
+			<target ref="id12"/>
+			<label kind="guard" x="93" y="552">Ele_direction[id]==1 &amp;&amp; door_idle_event[id]==true</label>
+			<label kind="assignment" x="297" y="578">Ele_state[id]=1,
+t=0,
+down_floors[id][1]=false</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id20"/>
+			<target ref="id8"/>
+			<label kind="guard" x="-595" y="297">Ele_direction[id]==0 &amp;&amp; door_idle_event[id]==true</label>
+			<label kind="assignment" x="-399" y="322">Ele_state[id]=0,
+t=0,
+up_floors[id][1]=false</label>
+		</transition>
+		<transition id="id32">
+			<source ref="id0"/>
+			<target ref="id20"/>
+			<label kind="guard" x="-68" y="450">t&gt;=1</label>
+			<label kind="assignment" x="-17" y="450">t=0,
+check(1)</label>
+		</transition>
+		<transition id="id33">
+			<source ref="id19"/>
+			<target ref="id11"/>
+			<label kind="guard" x="110" y="110">Ele_direction[id]==1 &amp;&amp; door_idle_event[id]==true</label>
+			<label kind="assignment" x="297" y="127">Ele_state[id]=1,
+t=0,
+down_floors[id][2]=false</label>
+		</transition>
+		<transition id="id34">
+			<source ref="id19"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-170" y="42">Ele_direction[id]==2 || door_idle_event[id]==false</label>
+			<nail x="8" y="93"/>
+			<nail x="-42" y="51"/>
+		</transition>
+		<transition id="id35">
+			<source ref="id19"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-595" y="-153">Ele_direction[id]==0 &amp;&amp; door_idle_event[id]==true</label>
+			<label kind="assignment" x="-374" y="-128">Ele_state[id]=0,
+t=0,
+up_floors[id][2]=false</label>
+		</transition>
+		<transition id="id36">
+			<source ref="id4"/>
+			<target ref="id19"/>
+			<label kind="guard" x="-51" y="-9">t&gt;=1</label>
+			<label kind="assignment" x="-8" y="-9">t=0,
+check(2)</label>
+		</transition>
+		<transition id="id37">
+			<source ref="id5"/>
+			<target ref="id11"/>
+			<label kind="guard" x="136" y="-34">down_floors[id][2]==false &amp;&amp; Ele_direction[id]==1</label>
+			<nail x="518" y="84"/>
+		</transition>
+		<transition id="id38">
+			<source ref="id3"/>
+			<target ref="id12"/>
+			<label kind="guard" x="153" y="407">down_floors[id][1]==false &amp;&amp; Ele_direction[id]==1</label>
+			<nail x="510" y="561"/>
+		</transition>
+		<transition id="id39">
+			<source ref="id2"/>
+			<target ref="id8"/>
+			<label kind="guard" x="-612" y="450">up_floors[id][1]==false &amp;&amp; Ele_direction[id]==0</label>
+			<nail x="-654" y="373"/>
+		</transition>
+		<transition id="id40">
+			<source ref="id3"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-586" y="68">up_floors[id][2]==false &amp;&amp; Ele_direction[id]==0</label>
+			<nail x="-663" y="-94"/>
+		</transition>
+		<transition id="id41">
+			<source ref="id13"/>
+			<target ref="id6"/>
+			<label kind="guard" x="-340" y="-459">Ele_time[id]==floor_travel_time</label>
+			<label kind="synchronisation" x="-340" y="-442">open_door[id]!</label>
+			<label kind="assignment" x="-340" y="-425">Ele_cur_floor[id]=3,
+Ele_time[id]=0,
+Ele_state[id]=2,
+up_floors[id][3]=false,
+down_floors[id][3]=false,
+Ele_direction[id]=1</label>
+			<nail x="-382" y="-306"/>
+		</transition>
+		<transition id="id42">
+			<source ref="id15"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-34" y="748">Ele_time[id]==floor_travel_time</label>
+			<label kind="synchronisation" x="-34" y="765">open_door[id]!</label>
+			<label kind="assignment" x="-34" y="782">Ele_cur_floor[id]=0,
+Ele_time[id]=0,
+Ele_state[id]=2,
+down_floors[id][0]=false,
+up_floors[id][0]=false,
+Ele_direction[id]=0</label>
+			<nail x="212" y="782"/>
+		</transition>
+		<transition id="id43">
+			<source ref="id15"/>
+			<target ref="id12"/>
+			<label kind="guard" x="263" y="765">Ele_time[id]&lt;floor_travel_time</label>
+			<nail x="272" y="765"/>
+			<nail x="467" y="765"/>
+		</transition>
+		<transition id="id44">
+			<source ref="id12"/>
+			<target ref="id15"/>
+			<label kind="assignment" x="229" y="697">Ele_time[id] = Ele_time[id] + 1,
+t = 0</label>
+			<nail x="229" y="714"/>
+		</transition>
+		<transition id="id45">
+			<source ref="id17"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-51" y="194">Ele_time[id]==floor_travel_time</label>
+			<label kind="assignment" x="-8" y="220">Ele_cur_floor[id]=1,
+Ele_time[id]=0</label>
+		</transition>
+		<transition id="id46">
+			<source ref="id17"/>
+			<target ref="id11"/>
+			<label kind="guard" x="255" y="245">Ele_time[id]&lt;floor_travel_time</label>
+			<nail x="272" y="271"/>
+			<nail x="467" y="271"/>
+		</transition>
+		<transition id="id47">
+			<source ref="id11"/>
+			<target ref="id17"/>
+			<label kind="assignment" x="255" y="194">Ele_time[id]=Ele_time[id]+1,
+t=0</label>
+		</transition>
+		<transition id="id48">
+			<source ref="id16"/>
+			<target ref="id10"/>
+			<label kind="guard" x="221" y="-196">Ele_time[id]&lt;floor_travel_time</label>
+			<nail x="263" y="-179"/>
+			<nail x="459" y="-179"/>
+		</transition>
+		<transition id="id49">
+			<source ref="id16"/>
+			<target ref="id5"/>
+			<label kind="guard" x="-68" y="-247">Ele_time[id]==floor_travel_time</label>
+			<label kind="assignment" x="8" y="-230">Ele_cur_floor[id]=2,
+Ele_time[id]=0</label>
+		</transition>
+		<transition id="id50">
+			<source ref="id10"/>
+			<target ref="id16"/>
+			<label kind="assignment" x="246" y="-247">Ele_time[id]=Ele_time[id]+1,
+t=0</label>
+		</transition>
+		<transition id="id51">
+			<source ref="id13"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-646" y="-298">Ele_time[id]&lt;floor_travel_time</label>
+			<nail x="-433" y="-273"/>
+			<nail x="-595" y="-273"/>
+		</transition>
+		<transition id="id52">
+			<source ref="id9"/>
+			<target ref="id13"/>
+			<label kind="assignment" x="-620" y="-247">Ele_time[id]=Ele_time[id]+1,
+t=0</label>
+		</transition>
+		<transition id="id53">
+			<source ref="id18"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-365" y="680">Ele_time[id]==floor_travel_time</label>
+			<label kind="assignment" x="-323" y="697">Ele_cur_floor[id]=1,
+Ele_time[id]=0</label>
+		</transition>
+		<transition id="id54">
+			<source ref="id18"/>
+			<target ref="id7"/>
+			<label kind="guard" x="-620" y="671">Ele_time[id]&lt;floor_travel_time</label>
+			<nail x="-399" y="671"/>
+			<nail x="-595" y="671"/>
+		</transition>
+		<transition id="id55">
+			<source ref="id7"/>
+			<target ref="id18"/>
+			<label kind="assignment" x="-603" y="697">Ele_time[id]=Ele_time[id]+1,
+t=0</label>
+		</transition>
+		<transition id="id56">
+			<source ref="id14"/>
+			<target ref="id8"/>
+			<label kind="guard" x="-654" y="152">Ele_time[id]&lt;floor_travel_time</label>
+			<nail x="-433" y="177"/>
+			<nail x="-603" y="177"/>
+		</transition>
+		<transition id="id57">
+			<source ref="id14"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-365" y="186">Ele_time[id]==floor_travel_time</label>
+			<label kind="assignment" x="-348" y="203">Ele_cur_floor[id]=2,
+Ele_time[id]=0</label>
+		</transition>
+		<transition id="id58">
+			<source ref="id8"/>
+			<target ref="id14"/>
+			<label kind="assignment" x="-620" y="203">Ele_time[id]=Ele_time[id]+1,
+t=0</label>
+		</transition>
+		<transition id="id59">
+			<source ref="id3"/>
+			<target ref="id0"/>
+			<label kind="guard" x="-178" y="288">down_floors[id][1]==true &amp;&amp; Ele_direction[id]==1</label>
+			<label kind="synchronisation" x="-178" y="305">open_door[id]!</label>
+			<label kind="assignment" x="-178" y="331">Ele_state[id]=2,
+down_floors[id][1]=false</label>
+		</transition>
+		<transition id="id60">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-178" y="85">up_floors[id][2]==true &amp;&amp; Ele_direction[id]==0</label>
+			<label kind="synchronisation" x="-170" y="102">open_door[id]!</label>
+			<label kind="assignment" x="-170" y="119">Ele_state[id]=2,
+up_floors[id][2]=false</label>
+		</transition>
+		<transition id="id61">
+			<source ref="id5"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-161" y="-153">down_floors[id][2]==true</label>
+			<label kind="synchronisation" x="-161" y="-136">open_door[id]!</label>
+			<label kind="assignment" x="-161" y="-119">Ele_state[id]=2,
+down_floors[id][3]=false</label>
+		</transition>
+		<transition id="id62">
+			<source ref="id2"/>
+			<target ref="id0"/>
+			<label kind="guard" x="-187" y="561">up_floors[id][1]==true</label>
+			<label kind="synchronisation" x="-187" y="578">open_door[id]!</label>
+			<label kind="assignment" x="-187" y="603">Ele_state[id]=2,
+up_floors[id][1]=false</label>
+		</transition>
+	</template>
+	<template>
+		<name>Door</name>
+		<parameter>ElevatorID id</parameter>
+		<declaration>clock t;</declaration>
+		<location id="id63" x="-433" y="-17">
+			<name x="-561" y="-34">Door_closed</name>
+		</location>
+		<location id="id64" x="-144" y="-204">
+			<name x="-238" y="-246">Opening_door</name>
+			<label kind="invariant" x="-221" y="-221">t &lt;= 1</label>
+		</location>
+		<location id="id65" x="144" y="-8">
+			<name x="161" y="-51">Stopped_door_opened</name>
+			<label kind="invariant" x="161" y="-25">t &lt;= 1</label>
+		</location>
+		<location id="id66" x="-144" y="204">
+			<name x="-144" y="221">Closing_door</name>
+			<label kind="invariant" x="-127" y="238">t &lt;= 1</label>
+		</location>
+		<location id="id67" x="144" y="-204">
+			<committed/>
+		</location>
+		<location id="id68" x="314" y="204">
+			<committed/>
+		</location>
+		<location id="id69" x="-433" y="212">
+			<committed/>
+		</location>
+		<init ref="id63"/>
+		<transition id="id70">
+			<source ref="id69"/>
+			<target ref="id63"/>
+			<label kind="guard" x="-612" y="42">door_time[id] == door_move_time</label>
+			<label kind="assignment" x="-612" y="68">Ele_state[id] = 2,
+door_idle_event[id] = true,
+door_time[id] = 0</label>
+		</transition>
+		<transition id="id71">
+			<source ref="id69"/>
+			<target ref="id66"/>
+			<label kind="guard" x="-416" y="161">door_time[id] &lt; door_move_time</label>
+			<nail x="-365" y="170"/>
+			<nail x="-204" y="170"/>
+		</transition>
+		<transition id="id72">
+			<source ref="id66"/>
+			<target ref="id69"/>
+			<label kind="assignment" x="-450" y="263">door_time[id] = door_time[id] + 1,
+t = 0</label>
+			<nail x="-212" y="254"/>
+			<nail x="-365" y="255"/>
+		</transition>
+		<transition id="id73">
+			<source ref="id68"/>
+			<target ref="id66"/>
+			<label kind="guard" x="-8" y="187">door_time[id] == door_stay_time</label>
+			<label kind="assignment" x="-8" y="212">Ele_state[id] = 5,
+door_time[id] = 0</label>
+		</transition>
+		<transition id="id74">
+			<source ref="id68"/>
+			<target ref="id65"/>
+			<label kind="guard" x="42" y="136">door_time[id] &lt; door_stay_time</label>
+			<nail x="212" y="153"/>
+			<nail x="136" y="59"/>
+		</transition>
+		<transition id="id75">
+			<source ref="id65"/>
+			<target ref="id68"/>
+			<label kind="assignment" x="280" y="25">door_time[id] = door_time[id] + 1,
+t = 0</label>
+			<nail x="221" y="8"/>
+			<nail x="306" y="110"/>
+		</transition>
+		<transition id="id76">
+			<source ref="id67"/>
+			<target ref="id64"/>
+			<label kind="guard" x="-127" y="-170">door_time[id] &lt; door_move_time</label>
+			<nail x="59" y="-170"/>
+			<nail x="-51" y="-170"/>
+		</transition>
+		<transition id="id77">
+			<source ref="id64"/>
+			<target ref="id67"/>
+			<label kind="assignment" x="-110" y="-297">door_time[id] = door_time[id] + 1,
+t = 0</label>
+			<nail x="-59" y="-255"/>
+			<nail x="59" y="-255"/>
+		</transition>
+		<transition id="id78">
+			<source ref="id67"/>
+			<target ref="id65"/>
+			<label kind="guard" x="144" y="-153">door_time[id] == door_move_time</label>
+			<label kind="assignment" x="144" y="-127">Ele_state[id] = 3,
+door_time[id] = 0</label>
+		</transition>
+		<transition id="id79">
+			<source ref="id65"/>
+			<target ref="id66"/>
+			<label kind="synchronisation" x="-42" y="51">close_door[id]?</label>
+			<label kind="assignment" x="-42" y="76">Ele_state[id] = 5,
+t = 0,
+door_time[id] = 0</label>
+			<nail x="85" y="34"/>
+			<nail x="-102" y="170"/>
+		</transition>
+		<transition id="id80">
+			<source ref="id66"/>
+			<target ref="id64"/>
+			<label kind="synchronisation" x="-204" y="-51">open_door[id]?</label>
+			<label kind="assignment" x="-297" y="-25">Ele_state[id] = 4,t = 0,
+door_time[id] = door_move_time - door_time[id]</label>
+		</transition>
+		<transition id="id81">
+			<source ref="id63"/>
+			<target ref="id64"/>
+			<label kind="guard" x="-399" y="-161">Ele_state[id] == 2</label>
+			<label kind="synchronisation" x="-399" y="-136">open_door[id]?</label>
+			<label kind="assignment" x="-399" y="-110">Ele_state[id] = 4,
+door_idle_event[id] = false,
+t = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>User</name>
+		<parameter>UserID uid</parameter>
+		<declaration>clock t;
+
+bool check_elevator(Direction call_direction){
+    ElevatorID elein = user_elevator[uid];
+    if ((Ele_direction[elein] == call_direction) &amp;&amp; (Ele_cur_floor[elein] == user_floor[uid]) &amp;&amp; (Ele_time[elein] == 0)){
+        return true;
+    }
+    if ((Ele_direction[elein] == 2) &amp;&amp; (Ele_cur_floor[elein] == user_floor[uid]) &amp;&amp; (Ele_time[elein] == 0)){
+        return true;
+    }
+    return false;
+}
+
+bool check_reach(){
+    ElevatorID elein = user_elevator[uid];
+    if ((Ele_cur_floor[elein] == user_to[uid]) &amp;&amp; (Ele_time[elein] == 0)){
+        return true;
+    }
+    return false;
+}
+
+// controller
+int estimate_door_open_time(ElevatorID id){
+    int open_time = door_move_time + door_stay_time;
+    if (Ele_state[id] == 4){
+        open_time = door_move_time + door_stay_time - door_time[id];
+    }else if(Ele_state[id] == 3){
+        open_time = door_stay_time - door_time[id];
+    }else if(Ele_state[id] == 5){
+        open_time = door_time[id] + door_stay_time;
+    }
+    return open_time;
+}
+
+int estimate_door_close_time(ElevatorID id){
+    int close_time = 0;
+    if (Ele_state[id] == 4){
+        close_time = door_move_time*2 + door_stay_time - door_time[id];
+    }else if(Ele_state[id] == 3){
+        close_time = door_stay_time + door_move_time - door_time[id];
+    }else if(Ele_state[id] == 5){
+        close_time = door_move_time - door_time[id];
+    }
+    return close_time;
+}
+
+
+
+int i = 0;
+int total_door_time = door_move_time*2 + door_stay_time;
+
+// function: estimate_arrival_time arrival_summary calculate_duration
+int estimate_arrival_time(ElevatorID id, Floor call_floor, Direction call_direction){
+    int arrival_time = 0;
+    int cur_pos = Ele_cur_floor[id];
+    int cur_dir = Ele_direction[id];
+    int passed = Ele_time[id];
+    int iter_floor = cur_pos;
+
+    if ( Ele_state[id] == 0 or Ele_state[id] == 1 ){
+        arrival_time = door_move_time + door_stay_time;
+    }else if((call_floor == cur_pos) &amp;&amp; (cur_dir == call_direction or cur_dir == 2)){
+        return estimate_door_open_time(id);
+    }else{
+        // not stopped at the same floor
+        arrival_time = estimate_door_close_time(id) + door_move_time + door_stay_time;
+    } 
+
+    if (cur_dir == 2){
+        if (cur_pos &gt; call_floor){
+            arrival_time += (cur_pos - call_floor)*floor_travel_time;
+        }else{
+            arrival_time += (call_floor - cur_pos)*floor_travel_time;
+        }
+    }
+
+    if (cur_dir = 0){
+        //cur_pos -&gt; 3
+        for (i = cur_pos + 1; i &lt; 4; i++){
+            if ((i == call_floor) &amp;&amp; (call_direction == 0)){
+                arrival_time += floor_travel_time*(i - iter_floor);
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if ((call_direction == 1) &amp;&amp; (i == 3) &amp;&amp; (call_floor == 3)){
+                arrival_time += floor_travel_time*(i - iter_floor);
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if (up_floors[id][i] == true){
+                arrival_time += total_door_time;
+                arrival_time += floor_travel_time*(i - iter_floor);
+                iter_floor = i;
+            }
+        }
+        // 3 -&gt; 0
+        for (i = 2; i &gt;= 0; i--){
+            if ((i == call_floor) &amp;&amp; (call_direction == 1)){
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }  
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if ((i == 0) &amp;&amp; (call_floor == 0) &amp;&amp; (call_direction == 0)){
+                arrival_time += floor_travel_time*(iter_floor - i); 
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if (up_floors[id][i] == true){
+                arrival_time += total_door_time;
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }               
+                iter_floor = i;
+            }
+        }
+        // 0 -&gt; cur_pos
+        for (i = 1; i &lt;= cur_pos; i++){
+            if ((i == call_floor) &amp;&amp; (call_direction == 0)){
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }  
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if (up_floors[id][i] == true){
+                arrival_time += total_door_time;
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }  
+                iter_floor = i;
+            }
+        }
+    }else if (cur_dir == 1){
+        // cur_pos -&gt; 0
+        for(i = cur_pos - 1; i &gt;= 0; i--){
+            if ((call_floor == i) &amp;&amp; (call_direction == 1)){
+                arrival_time += floor_travel_time*(iter_floor - i);
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if ((call_floor == 0) &amp;&amp; (i == 0) &amp;&amp; (call_direction == 0)){
+                arrival_time += floor_travel_time*(iter_floor - i);
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if (down_floors[id][i] == true){
+                arrival_time += total_door_time;
+                arrival_time += floor_travel_time*(iter_floor - i);
+                iter_floor = i;
+            }
+        }
+
+        for(i = 1; i &lt; 4; i++){
+            if ((call_floor == i) &amp;&amp; (call_direction == 0)){
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }  
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if ((i == 3) &amp;&amp; (call_floor == 3) &amp;&amp; (call_direction == 1)){
+                arrival_time += floor_travel_time*(i - iter_floor);
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if (up_floors[id][i] == true){
+                arrival_time += total_door_time;
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }               
+                iter_floor = i;
+            }
+        }
+
+        for (i = 2; i &gt;= cur_pos; i--){
+            arrival_time += floor_travel_time;
+            if ((call_floor == i) &amp;&amp; (call_direction == 1)){
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }  
+                arrival_time -= passed;
+                return arrival_time;
+            }
+            if (down_floors[id][i] == true){
+                arrival_time += total_door_time;
+                if (iter_floor &lt;= i){
+                    arrival_time += floor_travel_time*(i - iter_floor);
+                }else{
+                    arrival_time += floor_travel_time*(iter_floor - i);
+                }               
+                iter_floor = i;
+            }
+        }
+    }
+    
+    return arrival_time;
+
+}
+
+int wait_time1;
+int wait_time2;
+int open_signal = -1;
+void call_elevator(Floor call_floor, Direction call_direction){  
+    wait_time1 = estimate_arrival_time(0, call_floor, call_direction);   
+    wait_time2 = estimate_arrival_time(1, call_floor, call_direction);
+    open_signal = -1;
+    user_floor[uid] = call_floor;
+    if (wait_time1 &lt;= wait_time2){
+        user_elevator[uid] = 0;
+        if ((call_floor == Ele_cur_floor[0]) &amp;&amp; (Ele_time[0] == 0) &amp;&amp; (Ele_direction[0] == call_direction)){
+            open_signal = 0;
+            return;
+        }
+        if ((call_floor == Ele_cur_floor[0]) &amp;&amp; (Ele_time[0] == 0) &amp;&amp; (Ele_direction[0] == 2)){
+            open_signal = 0;
+            return;
+        }
+        if (call_direction == 0){ 
+            up_floors[0][call_floor] = true;
+            return;
+        }else if (call_direction == 1){
+            down_floors[0][call_floor] = true;
+            return;
+        }
+    }else if(wait_time1 &gt; wait_time2){
+        user_elevator[uid] = 1;
+        if ((call_floor == Ele_cur_floor[1]) &amp;&amp; (Ele_time[1] == 0) &amp;&amp; (Ele_direction[0] == call_direction)){
+            open_signal = 1;
+            return ;
+        }
+        if ((call_floor == Ele_cur_floor[1]) &amp;&amp; (Ele_time[1] == 0) &amp;&amp; (Ele_direction[0] == 2)){
+            open_signal = 0;
+            return;
+        }
+        if (call_direction == 0){ 
+            up_floors[1][call_floor] = true;
+            return;
+        }else if (call_direction == 1){
+            down_floors[1][call_floor] = true;
+            return;
+        }
+    }
+    return;
+}
+
+void selectto(Floor wantfloor, Direction godir){
+    user_to[uid] = wantfloor;
+    if (godir == 0){
+        up_floors[user_elevator[uid]][wantfloor] = true;
+    }else{
+        down_floors[user_elevator[uid]][wantfloor] = true;
+    }
+    return;
+}
+</declaration>
+		<location id="id82" x="-4768" y="-3816">
+			<name x="-4794" y="-3850">Outside</name>
+		</location>
+		<location id="id83" x="-4454" y="-3706">
+			<name x="-4488" y="-3697">WaitDown</name>
+			<urgent/>
+		</location>
+		<location id="id84" x="-4054" y="-3884">
+			<name x="-4088" y="-3918">SelectUp</name>
+			<urgent/>
+		</location>
+		<location id="id85" x="-3765" y="-3799">
+			<name x="-3765" y="-3850">Inside</name>
+			<urgent/>
+		</location>
+		<location id="id86" x="-4054" y="-3706">
+			<name x="-4088" y="-3689">SelectDown</name>
+			<urgent/>
+		</location>
+		<location id="id87" x="-3765" y="-3519">
+			<name x="-3791" y="-3553">Reach</name>
+			<urgent/>
+		</location>
+		<location id="id88" x="-4454" y="-3884">
+			<name x="-4488" y="-3867">WaitUp</name>
+			<urgent/>
+		</location>
+		<init ref="id82"/>
+		<transition id="id89">
+			<source ref="id87"/>
+			<target ref="id82"/>
+			<nail x="-4768" y="-3527"/>
+		</transition>
+		<transition id="id90">
+			<source ref="id82"/>
+			<target ref="id83"/>
+			<label kind="select" x="-4734" y="-3748">now_floor:int[1,3]</label>
+			<label kind="assignment" x="-4760" y="-3723">call_elevator(now_floor, 1)</label>
+		</transition>
+		<transition id="id91">
+			<source ref="id82"/>
+			<target ref="id88"/>
+			<label kind="select" x="-4734" y="-3918">now_floor:int[0,2]</label>
+			<label kind="assignment" x="-4785" y="-3893">call_elevator(now_floor, 0)</label>
+		</transition>
+		<transition id="id92">
+			<source ref="id85"/>
+			<target ref="id85"/>
+			<label kind="guard" x="-3723" y="-3808">!check_reach()</label>
+			<nail x="-3672" y="-3748"/>
+			<nail x="-3672" y="-3842"/>
+		</transition>
+		<transition id="id93">
+			<source ref="id85"/>
+			<target ref="id87"/>
+			<label kind="guard" x="-3748" y="-3638">check_reach()</label>
+		</transition>
+		<transition id="id94">
+			<source ref="id83"/>
+			<target ref="id83"/>
+			<label kind="guard" x="-4530" y="-3791">!check_elevator(1)</label>
+			<nail x="-4522" y="-3765"/>
+			<nail x="-4394" y="-3765"/>
+		</transition>
+		<transition id="id95">
+			<source ref="id83"/>
+			<target ref="id86"/>
+			<label kind="guard" x="-4343" y="-3697">check_elevator(1)</label>
+		</transition>
+		<transition id="id96">
+			<source ref="id88"/>
+			<target ref="id88"/>
+			<label kind="guard" x="-4530" y="-3978">!check_elevator(0)</label>
+			<nail x="-4522" y="-3944"/>
+			<nail x="-4386" y="-3944"/>
+		</transition>
+		<transition id="id97">
+			<source ref="id88"/>
+			<target ref="id84"/>
+			<label kind="guard" x="-4343" y="-3910">check_elevator(0)</label>
+		</transition>
+		<transition id="id98">
+			<source ref="id86"/>
+			<target ref="id85"/>
+			<label kind="guard" x="-3935" y="-3646">user_floor[i] == 1</label>
+			<label kind="assignment" x="-3935" y="-3629">selectto(0, 1)</label>
+			<nail x="-3986" y="-3612"/>
+			<nail x="-3774" y="-3663"/>
+		</transition>
+		<transition id="id99">
+			<source ref="id86"/>
+			<target ref="id85"/>
+			<label kind="select" x="-3986" y="-3723">go_floor:int[0, 1]</label>
+			<label kind="guard" x="-3986" y="-3706">user_floor[i]==2</label>
+			<label kind="assignment" x="-3986" y="-3689">selectto(go_floor, 1)</label>
+			<nail x="-3995" y="-3663"/>
+			<nail x="-3799" y="-3723"/>
+		</transition>
+		<transition id="id100">
+			<source ref="id84"/>
+			<target ref="id85"/>
+			<label kind="guard" x="-3978" y="-4020">user_floor[i]==2</label>
+			<label kind="assignment" x="-3978" y="-4003">selectto(3, 0)</label>
+			<nail x="-3978" y="-4003"/>
+			<nail x="-3765" y="-3944"/>
+		</transition>
+		<transition id="id101">
+			<source ref="id84"/>
+			<target ref="id85"/>
+			<label kind="select" x="-3986" y="-3961">go_floor:int[2, 3]</label>
+			<label kind="guard" x="-3986" y="-3944">user_floor[i]==1</label>
+			<label kind="assignment" x="-3986" y="-3927">selectto(go_floor, 0)</label>
+			<nail x="-3995" y="-3935"/>
+			<nail x="-3799" y="-3884"/>
+		</transition>
+		<transition id="id102">
+			<source ref="id86"/>
+			<target ref="id85"/>
+			<label kind="select" x="-4054" y="-3791">go_floor:int[0, 2]</label>
+			<label kind="guard" x="-4054" y="-3774">user_floor[i]==3</label>
+			<label kind="assignment" x="-4054" y="-3757">selectto(go_floor, 1)</label>
+		</transition>
+		<transition id="id103">
+			<source ref="id84"/>
+			<target ref="id85"/>
+			<label kind="select" x="-4012" y="-3893">go_floor:int[1, 3]</label>
+			<label kind="guard" x="-4012" y="-3876">user_floor[i]==0</label>
+			<label kind="assignment" x="-4012" y="-3859">selectto(go_floor, 0)</label>
+		</transition>
+	</template>
+	<system>// Place template instantiations here.
+Elevator1 = Elevator(0);
+Elevator2 = Elevator(1);
+Door1 = Door(0);
+Door2 = Door(1);
+User1 = User(0);
+User2 = User(1);
+//User3 = User(2);
+// List one or more processes to be composed into a system.
+system Elevator1, Elevator2, Door1, Door2, User1, User2;
+</system>
+	<queries>
+		<option key="--diagnostic" value="1"/>
+		<query>
+			<formula>A[] ((Ele_state[0] == 0 || Ele_state[0] == 1) imply (door_idle_event[0] == true))</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2025-06-07 23:24:17 +0800">
+				<option key="--diagnostic" value="1"/>
+			</result>
+		</query>
+		<query>
+			<formula>A[] (Ele_state[0] != 0 &amp;&amp; Ele_state[0] != 1) imply (Ele_time[0] == 0)</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2025-06-07 23:39:54 +0800">
+				<option key="--diagnostic" value="1"/>
+			</result>
+		</query>
+		<query>
+			<formula>A&lt;&gt; ((User1.WaitUp imply User1.Reach) &amp;&amp; (User1.WaitDown imply User1.Reach) &amp;&amp; (User2.WaitUp imply User2.Reach) &amp;&amp; (User2.WaitDown imply User2.Reach))</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2025-06-07 23:52:43 +0800">
+				<option key="--diagnostic" value="1"/>
+			</result>
+		</query>
+	</queries>
+</nta>
