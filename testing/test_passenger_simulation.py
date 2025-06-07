@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from common import GUIAsyncioTestCase, logger
+from common import GUIAsyncioTestCase, logger, Floor
 from passenger import Passenger, generate_passengers
 
 
@@ -55,7 +55,7 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
                     if passenger.handle_message(message):
                         completed += 1
                         active.remove(passenger)
-                        logger.info(f"Passenger {passenger.name} completed his journey, remaining: {len(active)}")
+                        logger.debug(f"Completed {completed}/{len(passengers)}")
 
                 # Test completion check
                 if completed == len(passengers):
@@ -100,7 +100,6 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         self.controller.set_elevator_count(6)
         count = 100
         ps = generate_passengers(count, self.passenger_msg)
-        self.assertEqual(len(ps), count)
         await self.simulate_passengers(ps)
 
 

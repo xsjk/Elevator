@@ -3,8 +3,8 @@ import bisect
 import inspect
 from copy import copy
 from dataclasses import dataclass, field
-from itertools import chain, combinations_with_replacement, pairwise
-from typing import Iterable, Iterator, Self, SupportsIndex, overload
+from itertools import chain, combinations_with_replacement, pairwise, combinations, permutations
+from typing import Generator, Iterable, Iterator, Self, SupportsIndex, overload
 
 from ..utils.common import (
     Direction,
@@ -1059,22 +1059,25 @@ class Elevators(dict[ElevatorId, Elevator]):
     def eids(self) -> set[ElevatorId]:
         return set(self.keys())
 
-    def _plan_to_assignment(self, plan: tuple[ElevatorId, ...]) -> dict[ElevatorId, set[FloorAction]]:
-        """
-        Convert a plan to an assignment of requests to elevators.
-        """
-        assert len(plan) == len(self.request2eid)
-
-        assignment: dict[ElevatorId, set[FloorAction]] = {eid: set() for eid in self.eids}
-        for eid, request in zip(plan, self.request2eid.keys()):
-            assignment[eid].add(request)
-        return assignment
-
     @property
-    def all_possible_assignments(self) -> Iterable[dict[ElevatorId, set[FloorAction]]]:
-        return map(self._plan_to_assignment, combinations_with_replacement(self.eids, len(self.request2eid)))
+    def most_possible_assignments(self) -> Generator[dict[ElevatorId, set[FloorAction]]]:
+        request_count = len(self.request2eid)
+        max_eid_count = min(len(self.eids), request_count)
+        for plan in combinations_with_replacement(self.eids, request_count):
+            # maximize the number of elevators used
+            if len(set(plan)) < max_eid_count:
+                continue
 
-    def estimate_total_duration(self, directed_request: FloorAction) -> tuple[ElevatorId, float]:
+            # Convert the plan to an assignment
+            assert len(plan) == request_count
+            assert len(set(plan)) == max_eid_count
+
+            assignment: dict[ElevatorId, set[FloorAction]] = {eid: set() for eid in self.eids}
+            for eid, request in zip(plan, self.request2eid.keys()):
+                assignment[eid].add(request)
+            yield assignment
+
+    def estimate_total_duration(self, directed_request: FloorAction) -> tuple[float, ElevatorId]:
         """
         Estimate the total duration for all elevators based on their current state and requests.
 
@@ -1082,7 +1085,8 @@ class Elevators(dict[ElevatorId, Elevator]):
         """
         durations = {eid: elevator.estimate_total_duration() for eid, elevator in self.items()}
         durations = {target_eid: max(e.estimate_total_duration(directed_request) if e.id == target_eid else durations[e.id] for e in self.values()) for target_eid in self.eids}
-        return min(durations.items(), key=lambda x: x[1])
+        best_eid = min(durations, key=lambda eid: durations[eid])
+        return durations[best_eid], best_eid
 
 
 if __name__ == "__main__":

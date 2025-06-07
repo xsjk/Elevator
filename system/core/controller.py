@@ -233,32 +233,24 @@ class Controller:
         elevators = self.elevators.copy()
 
         # Find the best assignment plan by evaluating all possible combinations
-        # Calculate the best assignment based on the total time
-
-        best_elevator_id = None
-        best_assignment: assignmentType = {}
-        best_total_time = float("inf")
-        for assignment in self.elevators.all_possible_assignments:
-            # Apply the current assignment to the elevators
-            elevators.reassign(assignment)
-            eid, duration = elevators.estimate_total_duration(request)
-
-            # Check if this is the best assignment found so far
-            if duration < best_total_time:
-                best_total_time = duration
-                best_elevator_id = eid
-                best_assignment = assignment
-
-        assert best_elevator_id is not None
+        (_, best_elevator_id), _, best_assignment = min(
+            (
+                (
+                    elevators.reassign(assignment).estimate_total_duration(request),
+                    i,  # in case the duration is the same, we will use the former assignment
+                    assignment,
+                )
+                for i, assignment in enumerate(self.elevators.most_possible_assignments)
+            ),
+        )
 
         # Check if current assignment is already optimal
         if best_assignment == self.elevators.eid2request:
-            logger.info("Controller: Current assignment is already optimal")
+            logger.debug("Controller: Current assignment is already optimal")
         else:
             # Apply changes to real elevators
             self.elevators.reassign(best_assignment)
-
-            logger.info(f"Controller: Optimized elevator assignments: {best_assignment}")
+            logger.debug(f"Controller: Optimized elevator assignments: {best_assignment}")
 
         return best_elevator_id
 

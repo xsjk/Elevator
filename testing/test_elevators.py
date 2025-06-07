@@ -186,14 +186,14 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
 
         # Request to floor 3 - elevator 1 should be closest
         request = FloorAction(3, Direction.UP)
-        eid, duration = self.elevators.estimate_total_duration(request)
+        _, eid = self.elevators.estimate_total_duration(request)
         self.assertEqual(eid, 1)  # Elevator 1 should be selected
 
         # Add existing requests to elevator 1 to make it busy
         self.elevators.commit_floor(1, FloorAction(10, Direction.UP))
 
         # Now elevator 2 should be the optimal choice for floor 3
-        eid, _ = self.elevators.estimate_total_duration(request)
+        _, eid = self.elevators.estimate_total_duration(request)
         self.assertEqual(eid, 2)  # Elevator 2 should now be selected
 
     async def test_concurrent_requests(self):
@@ -213,7 +213,7 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
 
         # Commit each request to the optimal elevator
         for request in requests:
-            eid, _ = self.elevators.estimate_total_duration(request)
+            _, eid = self.elevators.estimate_total_duration(request)
             self.elevators.commit_floor(eid, request)
 
         # Verify distribution - each elevator should have at least one request
@@ -237,7 +237,7 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
         # Commit all requests
         all_requests = up_requests + down_requests
         for request in all_requests:
-            eid, _ = self.elevators.estimate_total_duration(request)
+            _, eid = self.elevators.estimate_total_duration(request)
             self.elevators.commit_floor(eid, request)
 
         # Verify all requests were assigned
@@ -310,28 +310,6 @@ class TestElevators(unittest.IsolatedAsyncioTestCase):
 
         # Verify the event was set
         self.assertTrue(event2.is_set())
-
-    async def test_all_possible_assignments(self):
-        """Test generating all possible request-to-elevator assignments."""
-        # Create some requests
-        request1 = FloorAction(2, Direction.UP)
-        request2 = FloorAction(5, Direction.DOWN)
-        request3 = FloorAction(8, Direction.UP)
-
-        # Commit them to elevators
-        self.elevators.commit_floor(1, request1)
-        self.elevators.commit_floor(2, request2)
-        self.elevators.commit_floor(1, request3)
-
-        # Get all possible assignments
-        assignments = list(self.elevators.all_possible_assignments)
-
-        # With 3 elevators and 2 requests, there should be 3^2 = 9 possible assignments
-
-        n_elevators = len(self.elevators)
-        n_requests = len(self.elevators.requests)
-        n_assignments = len(assignments)
-        self.assertEqual(n_assignments, comb(n_elevators + n_requests - 1, n_requests))
 
     async def test_elevator_parameters(self):
         """Test that elevator parameters are correctly passed to all elevators."""

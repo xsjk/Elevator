@@ -85,5 +85,5 @@ def generate_passengers(num: int, queue: asyncio.Queue, floors=None, force_diffe
             target = random.choice([f for f in floors if f != start])
         else:
             target = random.choice(floors)
-        passengers.append(Passenger(start, target, f"P{i + 1}", queue=queue))
+        passengers.append(Passenger(start, target, f"P{i + 1:0{len(str(num - 1))}d}", queue=queue))
     return passengers
