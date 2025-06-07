@@ -7,7 +7,7 @@ class TestTargetFloorChains(unittest.TestCase):
     def setUp(self):
         self.chains = TargetFloorChains()
 
-    def testdirection(self):
+    def test_direction(self):
         self.chains.direction = Direction.UP
         self.assertEqual(self.chains.current_chain.direction, Direction.UP)
         self.assertEqual(self.chains.next_chain.direction, Direction.DOWN)
@@ -142,6 +142,130 @@ class TestTargetFloorChains(unittest.TestCase):
         # TestCase 4
         with self.assertRaises(IndexError):
             _ = self.chains[5]
+
+    def test_order(self):
+        # assume current position = 1
+
+        self.chains.add(FloorAction(3, Direction.DOWN), target_direction=Direction.UP)
+        self.assertEqual(self.chains.direction, Direction.UP)
+        self.assertEqual(len(self.chains.current_chain), 0)
+        self.assertEqual(len(self.chains.next_chain), 1)
+        self.assertEqual(len(self.chains.future_chain), 0)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(3, Direction.DOWN),
+            ],
+        )
+
+        self.chains.add(FloorAction(-1, Direction.UP), target_direction=Direction.DOWN)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(3, Direction.DOWN),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(1, Direction.UP), target_direction=Direction.IDLE)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(2, Direction.DOWN), target_direction=Direction.UP)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(2, Direction.DOWN),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(2, Direction.UP), target_direction=Direction.UP)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.UP),
+                FloorAction(2, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(2, Direction.DOWN),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(-1, Direction.IDLE), target_direction=Direction.DOWN)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.UP),
+                FloorAction(2, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(2, Direction.DOWN),
+                FloorAction(-1, Direction.IDLE),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(1, Direction.DOWN), target_direction=Direction.IDLE)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.UP),
+                FloorAction(2, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(2, Direction.DOWN),
+                FloorAction(1, Direction.DOWN),
+                FloorAction(-1, Direction.IDLE),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(2, Direction.IDLE), target_direction=Direction.UP)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.UP),
+                FloorAction(2, Direction.IDLE),
+                FloorAction(2, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(2, Direction.DOWN),
+                FloorAction(1, Direction.DOWN),
+                FloorAction(-1, Direction.IDLE),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
+
+        self.chains.add(FloorAction(1, Direction.IDLE), target_direction=Direction.IDLE)
+
+        self.assertEqual(
+            list(self.chains),
+            [
+                FloorAction(1, Direction.IDLE),
+                FloorAction(1, Direction.UP),
+                FloorAction(2, Direction.IDLE),
+                FloorAction(2, Direction.UP),
+                FloorAction(3, Direction.DOWN),
+                FloorAction(2, Direction.DOWN),
+                FloorAction(1, Direction.DOWN),
+                FloorAction(-1, Direction.IDLE),
+                FloorAction(-1, Direction.UP),
+            ],
+        )
 
 
 if __name__ == "__main__":

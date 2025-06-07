@@ -20,15 +20,13 @@ class Config:
     strategy: Strategy = Strategy.OPTIMAL
 
 
-type assignmentType = dict[ElevatorId, set[FloorAction]]  # Type alias for assignment dictionary
-
-
 @dataclass
 class Controller:
     config: Config = field(default_factory=Config)
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)  # Event queue for inter-component communication
     message_tasks: dict[str, asyncio.Task] = field(default_factory=dict)  # Tasks for handling messages, each task should handle asyncio.CancelledError in its implementation
     _started: bool = False  # Flag to indicate if the controller has been started
+    start_event: asyncio.Event = field(default_factory=asyncio.Event)  # Event to signal that the controller has started
 
     def __post_init__(self):
         self.elevators = Elevators(
@@ -69,7 +67,7 @@ class Controller:
                 requests = self.elevators.eid2request.pop(e.id)
                 # TODO: call elevators
                 logger.warning(f"Requests {requests} for elevator {e.id} will be lost, elevator will be stopped")
-                if e.started:
+                if e.is_started:
                     self.event_loop.create_task(e.stop(), name=f"StopElevator-{e.id} {__file__}:{inspect.stack()[0].lineno}")
 
         # add new elevators if count is more than current
@@ -87,12 +85,14 @@ class Controller:
                 if self._started:
                     self.elevators[i].start()
 
+                # TODO: reassign requests to new elevators
+
         self.config.elevator_count = count
 
     @property
     def started(self) -> bool:
         for e in self.elevators.values():
-            assert e.started == self._started, f"Controller: Elevator {e.id} started state mismatch: {e.started} != {self._started}"
+            assert e.is_started == self._started, f"Controller: Elevator {e.id} started state mismatch: {e.is_started} != {self._started}"
         return self._started
 
     async def reset(self):
@@ -308,7 +308,7 @@ class Controller:
         floor = Floor(floor)
 
         elevator = self.elevators[elevator_id]
-        if elevator.started is False:
+        if elevator.is_started is False:
             logger.warning(f"Controller: Elevator {elevator_id} is not enabled, cannot select floor {floor}")
             return
 

@@ -1,5 +1,4 @@
 import asyncio
-import random
 from dataclasses import dataclass, field
 from enum import IntEnum, auto
 
@@ -63,27 +62,3 @@ class Passenger:
                 # Passenger has finished
                 return True
         return self.finished and self.state == PassengerState.OUT_ELEVATOR_AT_TARGET_FLOOR
-
-
-def generate_passengers(num: int, queue: asyncio.Queue, floors=None, force_different=True) -> list[Passenger]:
-    """Generate random passengers
-
-    Args:
-        num: Number of passengers to generate
-        queue: Message queue for passengers
-        floors: List of floors to use (default: [-1, 1, 2, 3])
-        force_different: Force target floor to be different from start floor
-
-    Returns:
-        List of generated passengers
-    """
-    floors = floors or [-1, 1, 2, 3]
-    passengers: list[Passenger] = []
-    for i in range(num):
-        start = random.choice(floors)
-        if force_different:
-            target = random.choice([f for f in floors if f != start])
-        else:
-            target = random.choice(floors)
-        passengers.append(Passenger(start, target, f"P{i + 1:0{len(str(num - 1))}d}", queue=queue))
-    return passengers
