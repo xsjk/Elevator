@@ -644,7 +644,7 @@ class Elevator:
                     logger.debug(f"Elevator {self.id}: Waiting for door to close before moving")
                     await self.door_idle_event.wait()
 
-                    if directed_floor != self.target_floor_chains.top():
+                    if not self.target_floor_chains.is_empty() and directed_floor != self.target_floor_chains.top():
                         # Some other action was added while waiting for the door
                         continue
 

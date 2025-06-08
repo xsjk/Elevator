@@ -15,7 +15,11 @@ class ElevatorTest(GUIAsyncioTestCase):
 
         # Step 2: wait elevator arrives, then simulate open door just before it closes
         travel_time = self.elevator1.calculate_duration(n_floors=1, n_stops=0)
-        await asyncio.sleep(travel_time + cfg.door_stay_duration + cfg.door_move_duration + 0.02)
+        await asyncio.sleep(travel_time)
+        await asyncio.sleep(0.02)
+        await asyncio.sleep(cfg.door_move_duration)
+        await asyncio.sleep(0.02)
+        await asyncio.sleep(cfg.door_stay_duration)
 
         self.assertEqual(self.elevator1.current_floor, Floor(2))
         self.assertEqual(self.elevator2.current_floor, Floor(1))

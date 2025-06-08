@@ -62,20 +62,14 @@ class TestRunner:
             stderr_task = asyncio.create_task(read_stream(process.stderr, True))
 
             # Monitor process
-            while True:
-                # Check if process completed with timeout
-                try:
-                    return_code = await asyncio.wait_for(process.wait(), 0.5)
-                    break
-                except asyncio.TimeoutError:
-                    continue
+            await process.wait()
 
             # Process finished, make sure we got all output
             await stdout_task
             await stderr_task
 
             # Set final status
-            success = return_code == 0
+            success = "OK" in output[-1]
             self.set_status(test_path, "通过" if success else "失败")
             self.results[test_path] = success
 

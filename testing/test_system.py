@@ -288,6 +288,7 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         await asyncio.sleep(0.02)
 
         # Elevator 2 should reach floor 3, door should open
+        await asyncio.sleep(0.02)
         self.assertEqual(self.elevator2.current_floor, Floor("2"))
         self.assertTrue(self.elevator2.state.is_door_open())
 

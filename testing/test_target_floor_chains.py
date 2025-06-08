@@ -1,11 +1,11 @@
 import unittest
-
+import asyncio
 from common import Direction, FloorAction, TargetFloorChains
 
 
 class TestTargetFloorChains(unittest.TestCase):
     def setUp(self):
-        self.chains = TargetFloorChains()
+        self.chains = TargetFloorChains(event_loop=asyncio.AbstractEventLoop())
 
     def test_direction(self):
         self.chains.direction = Direction.UP

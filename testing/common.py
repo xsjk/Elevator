@@ -32,7 +32,7 @@ class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
         self.building = self.window.building_panel
 
         self.controller.set_config(
-            floor_travel_duration=0.1,
+            floor_travel_duration=0.2,
             door_stay_duration=0.1,
             door_move_duration=0.1,
         )

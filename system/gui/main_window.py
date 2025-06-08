@@ -381,6 +381,7 @@ class MainWindow(QMainWindow):
             for eid in range(count + 1, self.elevator_controller.config.elevator_count + 1):
                 panel = self.elevator_panels.pop(eid)
                 elevator_panels_layout.removeWidget(panel)
+                translation_manager.remove_observer(panel)
                 panel.deleteLater()
         elif count > self.elevator_controller.config.elevator_count:
             # Add new panels
