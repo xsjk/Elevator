@@ -132,11 +132,14 @@ Comprehensive test suite with interactive runner:
 # Interactive test selection
 uv run -m testing
 
-# Run all tests
+# Run all tests in parallel
 uv run -m testing --all
 
 # Run specific tests with limited concurrency
 uv run -m testing --tests test_controller.py --max-workers 4
+
+# Use unittest discover for automatic test discovery (sequential)
+uv run -m unittest discover -s testing -p test_*.py
 ```
 
 **Test Categories:**
