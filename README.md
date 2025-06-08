@@ -1,176 +1,339 @@
-# Elevator Control System
+# 🏢 Advanced Elevator Control System
 
-An advanced elevator control system implemented in Python using PySide6 for the graphical user interface. This system provides realistic elevator simulation with multi-elevator management, floor calling, door control, and smooth animations.
+A modern multi-elevator simulation platform with async architecture, real-time GUI, internationalization support, and comprehensive testing.
 
-## Features
+## 📋 Table of Contents
 
-### 🏢 Core Functionality
+- [🚀 Features](#-features)
+- [🚀 Getting Started](#-getting-started)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
+- [📖 Usage Guide](#-usage-guide)
+  - [GUI Mode](#gui-mode)
+  - [Headless Mode](#headless-mode)
+  - [Testing Framework](#testing-framework)
+- [🎮 Interactive Features](#-interactive-features)
+- [🌐 ZeroMQ API](#-zeromq-api)
+- [🏗️ System Architecture](#️-system-architecture)
+  - [Elevator States](#elevator-states)
+  - [Dispatch Algorithms](#dispatch-algorithms)
+- [📁 Project Structure](#-project-structure)
+- [🔧 Configuration Reference](#-configuration-reference)
+- [📄 License](#-license)
 
-- **Multi-Elevator System**: Control and monitor multiple independent elevators (configurable count)
-- **Smart Dispatching**: Intelligent elevator assignment based on distance and efficiency
-- **Floor Calling**: Call elevators from any floor with up/down direction
-- **Internal Floor Selection**: Select destination floors from inside elevators
-- **Door Control**: Manual door open/close functionality
-- **Real-time Status**: Live updates of elevator position, direction, and door state
+## 🚀 Features
 
-### 🎨 User Interface
+### Core Capabilities
 
-- **Modern GUI**: Beautiful PySide6-based interface with smooth animations
-- **Multi-language Support**: English and Chinese language support
-- **Visual Feedback**: Real-time elevator visualization with door animations
-- **Interactive Panels**: Separate building panel and elevator panels for intuitive control
-- **Status Indicators**: Clear display of elevator states and floor information
+- **Async Architecture**: Built with `asyncio` and `qasync` for non-blocking operations
+- **Multi-Elevator Control**: Intelligent dispatch algorithms (OPTIMAL, GREEDY) with state machines
+- **Real-Time GUI**: 2D elevator animation with Qt6
+- **Theme Support**: Light/dark mode with OS preference detection
+- **Internationalization**: Chinese/English support with runtime language switching
+- **Network Communication**: ZeroMQ for distributed testing and control
+- **Comprehensive Testing**: Unit, integration, and system tests
 
-### 🔧 Advanced Features
+### Key Components
 
-- **Asynchronous Architecture**: Non-blocking operations with async/await
-- **Event-driven System**: Reactive programming with event bus
-- **Animation System**: Smooth elevator movement and door animations
-- **ZeroMQ Communication**: Network-based client-server architecture for testing
-- **Comprehensive Logging**: Rich logging with colored output
-- **State Machine**: Robust elevator state management
+- **Event-Driven Core**: `asyncio.Event` and `asyncio.Queue` for inter-component communication
+- **State Machines**: Explicit elevator states (Moving Up/Down, Door Opening/Closing, Stopped)
+- **Live Animations**: Smooth 2D elevator and door animations
+- **Dynamic Configuration**: Runtime parameter updates without restart
 
-## Project Structure
+## 🚀 Getting Started
 
-```
-Elevator/
-├── system/
-│   ├── __init__.py           # Package initializer for the system module
-│   ├── __main__.py           # Main application entry point
-│   ├── core/
-│   │   ├── controller.py     # Core elevator control logic
-│   │   ├── elevator.py       # Elevator state machine and behavior
-│   ├── gui/
-│   │   ├── main_window.py    # Main GUI window and panels
-│   │   ├── gui_controller.py # GUI-specific controller
-│   │   ├── visualizer.py     # Elevator visualization component
-│   │   ├── i18n.py           # Internationalization support
-│   │   └── translations/     # Language files (EN/CN)
-│   └── utils/
-│       ├── common.py         # Common types and enums
-│       ├── event_bus.py      # Event system implementation
-│       └── zmq_async.py      # ZeroMQ async client/server
-├── testing/
-│   └── __main__.py           # Test server for automated testing
-├── docs/
-│   └── requirement/          # Project requirements and diagrams
-├── pyproject.toml            # Project configuration and dependencies
-└── README.md                 # This file
+### Installation
+
+**Requirements:**
+
+- Python 3.13+
+- Dependencies: PySide6/PyQt6, pyzmq, qasync, qtpy, rich, tornado, aioconsole
+
+```shell
+# Clone and setup
+git clone https://github.com/xsjk/Elevator.git
+cd Elevator
+uv sync
 ```
 
-## Requirements
+### Quick Start
 
-- Python 3.12 or higher
-- uv package manager
-
-## Installation
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone <repository-url>
-   cd Elevator
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   uv sync
-   ```
-
-## Usage
-
-### Run the Main Application
-
-To start the elevator control system with GUI:
-
-```bash
+```shell
+# Launch GUI mode (recommended for first-time users)
 uv run -m system
+
+# Launch headless mode for testing/automation
+uv run -m system --headless
+
+# Run test suite
+uv run -m testing --all
 ```
 
-To start without GUI (for testing purposes):
+## 📖 Usage Guide
 
-```bash
+### GUI Mode
+
+Launch the full graphical interface with real-time elevator visualization:
+
+```shell
+# Default configuration (2 elevators, 5 floors)
+uv run -m system
+
+# Custom configuration
+uv run -m system --num-elevators 4 --num-floors 10
+
+# Debug mode with faster timing
+uv run -m system --floor-travel-duration 0.5 --log-level DEBUG
+```
+
+**Features:**
+
+- Real-time 2D elevator animation
+- Interactive floor calling and destination selection
+- Theme switching (light/dark mode)
+- Language switching (English/Chinese)
+- Live configuration adjustments
+
+### Headless Mode
+
+Run core elevator logic without GUI for testing and automation:
+
+```shell
+# Basic headless mode
+uv run -m system --headless
+
+# Production-like configuration
+uv run -m system --headless --num-elevators 8 --num-floors 30
+```
+
+**Use Cases:**
+
+- Automated testing and CI/CD
+- Performance benchmarking
+- Server deployment without display
+- Integration with external systems via ZeroMQ
+
+### Testing Framework
+
+Comprehensive test suite with interactive runner:
+
+```shell
+# Interactive test selection
+uv run -m testing
+
+# Run all tests
+uv run -m testing --all
+
+# Run specific tests with limited concurrency
+uv run -m testing --tests test_controller.py --max-workers 4
+```
+
+**Test Categories:**
+
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Multi-component interaction testing
+- **Performance Tests**: Load and stress testing
+- **Passenger Simulation**: Realistic usage scenarios
+
+## 🎮 Interactive Features
+
+### GUI Controls
+
+- **Call Elevators**: Click floor buttons to call elevators up/down
+- **Select Destinations**: Click destination floor buttons inside elevators
+- **Change Theme**: Toggle between light/dark themes in real-time
+- **Switch Language**: Choose between English and Chinese interfaces
+- **Adjust Settings**: Modify elevator count and timing parameters live
+
+### Test Runner Interface
+
+- **Test Selection**: Choose specific tests by number (e.g., "1 3 5")
+- **Real-time Progress**: Live updates showing test status and results
+- **Detailed Output**: View detailed logs for failed tests
+- **Concurrent Execution**: Run multiple tests simultaneously
+
+## 🌐 ZeroMQ API
+
+The system provides a comprehensive ZeroMQ interface for external integration and testing.
+
+### Server Setup
+
+```shell
+# Start ZeroMQ test server
+uv run -m testing.server
+
+# Connect with elevator system (in another terminal)
 uv run -m system --headless
 ```
 
-This launches the main application with:
+### User Operations
 
-- Building panel for calling elevators
-- Multiple elevator panels for floor selection and door control (configurable count)
-- Real-time elevator visualization
-- Language switching (English/Chinese)
+- **Door Control**
 
-### Run the Test Server
+  - `open_door#1` - Open doors of elevator #1
+  - `close_door#2` - Close doors of elevator #2
 
-To start the test server for automated testing:
+- **Floor Calling**
 
-```bash
-uv run -m testing
+  - `call_up@1` - Call elevator from floor 1 going up
+  - `call_down@3` - Call elevator from floor 3 going down
+
+- **Destination Selection**
+
+  - `select_floor@2#1` - Go to floor 2 in elevator #1
+
+- **System Control**
+  - `reset` - Reset elevator system to initial state
+
+### System Events
+
+- **Door Events**
+
+  - `door_opened#1` - Doors of elevator #1 opened
+  - `door_closed#1` - Doors of elevator #1 closed
+
+- **Floor Arrival Events**
+  - `up_floor_1_arrived#1` - Elevator #1 arrived at floor 1 going up
+  - `down_floor_2_arrived#2` - Elevator #2 arrived at floor 2 going down
+  - `floor_1_arrived#1` - Elevator #1 stopped at floor 1
+
+### External Testing
+
+Compatible with CS132 test cases:
+
+```shell
+# Method 1: Built-in test server
+uv run -m testing.server
+
+# Terminal 2: Run system (GUI or headless)
+uv run -m system --headless
 ```
 
-This starts a ZeroMQ server that:
+**Available Parameters:**
 
-- Simulates passenger requests
-- Provides automated test scenarios
-- Allows external testing of the elevator system
-- Supports multiple concurrent test cases
+- Elevators: `#1`, `#2`
+- Floors: `-1` (basement), `1`, `2`, `3`
+- Call up floors: `-1`, `1`, `2`
+- Call down floors: `3`, `2`, `1`
 
-### Controls
+## 🏗️ System Architecture
 
-#### Building Panel
+## 📁 Project Structure
 
-- **Up/Down Buttons**: Call elevator to current floor
-- **Floor Selection**: Choose which floor to call from
-- **Status Display**: See which elevator is dispatched
+```text
+Elevator/
+├── system/                       # Core Application
+│   ├── __main__.py               # Entry point
+│   ├── core/                     # Business Logic
+│   │   ├── controller.py         # Elevator dispatch
+│   │   └── elevator.py           # Elevator state machine
+│   ├── gui/                      # User Interface
+│   │   ├── main_window.py        # Main window
+│   │   ├── visualizer.py         # 2D animations
+│   │   ├── theme_manager.py      # Theme system
+│   │   └── i18n.py               # Internationalization
+│   └── utils/                    # Utilities
+│       ├── event_bus.py          # Event system
+│       └── zmq_async.py          # ZeroMQ communication
+├── testing/                      # Test Suite
+│   ├── __main__.py               # Test runner
+│   ├── server.py                 # ZMQ test server
+│   └── test_*.py                 # Unit tests
+├── config.yaml                   # Configuration
+└── README.md                     # Documentation
+```
 
-#### Elevator Panel
+## 🔧 Configuration Reference
 
-- **Floor Buttons**: Select destination floor
-- **Door Controls**: Manual open/close door buttons
-- **Status Display**: Current floor, direction, and door state
-- **Target Floors**: View all selected destination floors
+### Command-Line Arguments
 
-## System Architecture
+#### Main System (`uv run -m system`)
 
-### Core Components
+| Argument                  | Type   | Default | Description                                           |
+| ------------------------- | ------ | ------- | ----------------------------------------------------- |
+| `--headless`              | flag   | false   | Run without GUI interface                             |
+| `--log-level`             | string | INFO    | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `--num-elevators`         | int    | 2       | Number of elevators in the building                   |
+| `--num-floors`            | int    | 5       | Number of floors in the building                      |
+| `--floor-travel-duration` | float  | 3.0     | Time (seconds) for elevator to travel between floors  |
+| `--door-move-duration`    | float  | 1.0     | Time (seconds) for door to open/close                 |
+| `--door-stay-duration`    | float  | 3.0     | Time (seconds) door stays open                        |
 
-1. **Controller**: Central control logic for elevator dispatching and coordination
-2. **Elevator**: Individual elevator state machines with movement and door control
-3. **GUI Controller**: Bridges the core logic with the user interface
-4. **Animation Manager**: Handles smooth visual transitions and movements
-5. **Event Bus**: Decoupled communication between components
+#### Testing Framework (`uv run -m testing`)
 
-### Key Design Patterns
+| Argument        | Type | Default | Description                                 |
+| --------------- | ---- | ------- | ------------------------------------------- |
+| `--all`         | flag | false   | Run all tests without interactive selection |
+| `--tests`       | list | []      | Specific test files to run                  |
+| `--max-workers` | int  | 16      | Maximum concurrent test processes           |
 
-- **State Machine**: Each elevator maintains its state (moving, stopped, door operations)
-- **Observer Pattern**: Event-driven updates between components
-- **Command Pattern**: User actions translated to elevator commands
-- **MVC Architecture**: Separation of model, view, and controller logic
+### Usage Examples
 
-## Configuration
+#### Development Scenarios
 
-The system supports various configuration options in `system/core/controller.py`:
+```shell
+# Minimal development setup
+uv run -m system --num-elevators 1 --num-floors 3 --log-level DEBUG
 
-- **Elevator Count**: Number of elevators (default: 2, configurable via Config.elevator_count)
-- **Floor Travel Duration**: Time to move between floors
-- **Door Operation Duration**: Time for door open/close operations
-- **Acceleration Settings**: Elevator movement acceleration parameters
+# Fast simulation for testing
+uv run -m system --floor-travel-duration 0.5 --door-move-duration 0.2 --door-stay-duration 1.0
 
-## License
+# Large-scale performance testing
+uv run -m system --num-elevators 8 --num-floors 30 --headless
+```
 
-This project is part of CS132 coursework at ShanghaiTech University.
+#### Testing Scenarios
 
-## Troubleshooting
+```shell
+# Specific test suites
+uv run -m testing --tests test_controller.py test_elevator.py
 
-### Common Issues
+# Integration testing with limited concurrency
+uv run -m testing --tests test_integration_1.py test_integration_2.py --max-workers 4
 
-1. **Import Errors**: Ensure all dependencies are installed with `uv sync`
-2. **GUI Not Starting**: Check PySide6 installation and Qt dependencies
-3. **Animation Issues**: Verify graphics drivers support Qt animations
-4. **Network Errors**: Ensure ZeroMQ ports are available for testing
+# Full CI/CD test run
+uv run -m testing --all --max-workers 8
+```
 
-### Performance Tips
+#### Network Testing
 
-- Use the async version for better responsiveness
-- Adjust animation durations for system performance
-- Monitor memory usage with multiple elevators running
+```shell
+# Terminal 1: Start ZeroMQ server
+uv run -m testing.server
+
+# Terminal 2: Connect system with custom settings
+uv run -m system --headless --num-elevators 4 --log-level INFO
+```
+
+### Elevator States
+
+The system implements a comprehensive state machine with six distinct states defined in `ElevatorState`:
+
+- **`MOVING_UP`**: Elevator traveling upward between floors
+- **`MOVING_DOWN`**: Elevator traveling downward between floors
+- **`STOPPED_DOOR_CLOSED`**: Elevator stationary with doors fully closed (idle state)
+- **`STOPPED_DOOR_OPENED`**: Elevator stationary with doors fully open for boarding/alighting
+- **`OPENING_DOOR`**: Doors in the process of opening
+- **`CLOSING_DOOR`**: Doors in the process of closing
+
+**Initial State**: All elevators start in `STOPPED_DOOR_CLOSED` state on floor 1.
+
+### Dispatch Algorithms
+
+- **OPTIMAL**: Minimizes total wait time across all passengers with reassignment
+- **GREEDY**: Prioritizes elevator for each request with faster response times
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+<div align="center">
+
+**Built with ❤️ by CS132 Students**
+
+[📚 Documentation](./docs/) • [🐛 Report Bug](./issues/) • [💡 Request Feature](./issues/) •
+
+</div>
+```
