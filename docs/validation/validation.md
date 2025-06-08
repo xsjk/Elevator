@@ -4,7 +4,6 @@
 
 ## Table of Contents
 - [Testing](#testing)  
-    - [Code Running](#code-running)
     - [T1: Unit Test](#t1-unit-test)
         - [T1.1 Controller Unit Test](#t11-controller-unit-test)
         - [T1.2 Elevator Unit Test](#t12-elevator-unit-test)
@@ -22,16 +21,6 @@
 - [Risk Management](#risk-management) 
 
 # *Testing*
-
-## Code Running
-
-### Environment Setup
-- Python: **3.13** needed
-
-To run all the testing code, you can run the command 
-```
-python -m testing
-```
 
 ## T1: Unit Test
 This section provides information of the unit tests we made.
@@ -2364,7 +2353,7 @@ A UPPAAL model of this Elevator system is built for model checking. You could fi
 the model_checking folder.
 
 ## Full Model
-The full UPPAAL model consisting of 3 parts: the Elevator, the elevator door, and the user.
+The full UPPAAL model consisting of 3 parts: the elevator, the elevator door, and the user.
 
 ### System model
 #### Elevator
@@ -2441,9 +2430,44 @@ In order to make up for the fact that in the modeling of the User Model, users c
 
 # *Risk Management*
 
-# Risk 1
+## Risk 1
 |   |   | 
 |---|---|
 | Risk | Whether elevator will stop between floors |
 | Severity/ Risk type | Safety risk. It may pose a threat to the user's life  | 
-| Mitigation | Model Checking query2 |
+| Mitigation | Model Checking Query 2 |
+
+## Risk 2
+|   |   | 
+|---|---|
+| Risk | Whether elevator will open door while moving |
+| Severity/ Risk type | Safety risk. It may pose a threat to the user's life  | 
+| Mitigation | Model Checking Query 1 |
+
+## Risk 3
+|   |   | 
+|---|---|
+| Risk | Whether elevator will stay at a state. |
+| Severity/ Risk type | There is probability that elevator stays at some state, if the user always press the open_door button. But the probability of this happening is considered very small, if a user uses the elevator normally, this risk will not occur. | 
+| Mitigation |  |
+
+## Risk 4
+|   |   | 
+|---|---|
+| Risk | Whether a user will be trapped in a elevator. |
+| Severity/ Risk type | Safety risk. It may pose a threat to the user's life. If an elevator has no physical problems, then users can get out of the elevator by pressing the door opening button. | 
+| Mitigation | Model Checking Query 4 & Query 5, Integration Test 1, System Test |
+
+## Risk 5
+|   |   | 
+|---|---|
+| Risk | Whether users' requests can always be processed. |
+| Severity/ Risk type | Efficacy Risk. Responding to user demands is a fundamental function of elevators. If they fail to respond to user demands normally, it is also a very serious risk.  | 
+| Mitigation | Model Checking Query 3 |
+
+## Risk 6
+|   |   | 
+|---|---|
+| Risk | Scheduling conflicts occur when multiple users request different floors simultaneously. |
+| Severity/ Risk type | Efficacy Risk. When a request is made, the elevator with the nearest arrival time should be mobilized. When there are multiple requests, they are sorted according to the target floor and the direction of the elevator's movement  | 
+| Mitigation | System Test T3.8 |
