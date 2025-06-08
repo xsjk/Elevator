@@ -41,7 +41,6 @@ if __name__ == "__main__":
     parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Set the logging level")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no GUI)")
     parser.add_argument("--num-elevators", type=int, default=2, help="Number of elevators to simulate")
-    parser.add_argument("--num-floors", type=int, default=5, help="Number of floors in the building")
     parser.add_argument("--floor-travel-duration", type=float, default=3.0, help="Duration for an elevator to travel between floors in seconds")
     parser.add_argument("--door-move-duration", type=float, default=1.0, help="Duration for an elevator door to open/close in seconds")
     parser.add_argument("--door-stay-duration", type=float, default=3.0, help="Duration for an elevator door to stay open in seconds")
