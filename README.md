@@ -47,7 +47,7 @@ Here's what the Advanced Elevator Control System looks like in action:
 
 ### Main Interface (Dark Theme)
 
-![Elevator Control System - Dark Theme](docs/user_manual/screenshot.png)
+![Elevator Control System - Dark Theme](docs/user_manual/pics/main_window_dark.png)
 
 _The main interface featuring real-time elevator visualization, floor controls, and status indicators in dark theme mode._
 

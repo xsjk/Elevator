@@ -72,7 +72,7 @@ class ElevatorVisualizer(QFrame):
                 "floor_line": QColor(150, 150, 150),
                 "up": QColor(0, 200, 0),  # Green
                 "down": QColor(200, 0, 0),  # Red
-                "idle": QColor(100, 100, 100),  # Gray
+                "idle": QColor(150, 150, 150),  # Gray
                 "door": QColor(200, 200, 200),  # Light gray
                 "door_open": QColor(50, 50, 50),  # Dark gray
             },

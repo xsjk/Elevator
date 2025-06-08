@@ -62,7 +62,6 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.assertIn("开", self.elevator1_UI.door_label.text())
         await asyncio.sleep(0.02)
         await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration)
-        await asyncio.sleep(0.02)
         # Door should close automatically after stay duration
         self.assertEqual(self.elevator1.state, ElevatorState.CLOSING_DOOR)
         self.building.down_buttons["2"].click()

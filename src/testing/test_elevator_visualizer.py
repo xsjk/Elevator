@@ -51,7 +51,7 @@ class TestElevatorVisualizer(unittest.TestCase):
             # Verify light theme colors
             self.assertEqual(self.visualizer.up_color, QColor(0, 200, 0))
             self.assertEqual(self.visualizer.down_color, QColor(200, 0, 0))
-            self.assertEqual(self.visualizer.idle_color, QColor(100, 100, 100))
+            self.assertEqual(self.visualizer.idle_color, QColor(150, 150, 150))
             self.assertEqual(self.visualizer.door_color, QColor(200, 200, 200))
             self.assertEqual(self.visualizer.door_open_color, QColor(50, 50, 50))
 

@@ -100,6 +100,11 @@ QComboBox {
     margin-right: 6px;
 }
 
+QComboBox::drop-down {
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
 QSpinBox, QDoubleSpinBox {
     padding: 4px 8px;
     min-width: 80px;

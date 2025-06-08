@@ -2,7 +2,7 @@ import logging
 import os
 
 from qtpy.QtCore import QCoreApplication, Qt
-from qtpy.QtGui import QIcon
+from qtpy.QtGui import QIcon, QKeySequence, QShortcut
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -271,6 +271,10 @@ class MainWindow(QMainWindow):
         self.content_layout.addWidget(self.building_panel, 1)
         self.content_layout.addWidget(self.elevators_widget, 3)
         self.content_layout.addWidget(sidebar, 1)
+
+        # Bind F5 to reset
+        reset_shortcut = QShortcut(QKeySequence("F5"), self)
+        reset_shortcut.activated.connect(lambda: self.elevator_controller.handle_message_task("reset"))
 
         # Update all UI texts
         self.update_language()
