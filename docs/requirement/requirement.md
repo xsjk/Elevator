@@ -166,5 +166,3 @@ elevator --> user: Elevator is going to floor 3
   - R6.2: Provide GUI controls for updating these parameters.
 
   - R6.3: Apply new settings immediately to subsequent operations.
-
-  - R6.4: Cover configuration logic with unit tests.
