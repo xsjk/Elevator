@@ -388,7 +388,7 @@ class Elevator:
 
     floor_travel_duration: float = 1.0
     accelerate_duration: float = 1.0
-    door_move_duration: float = 3.0
+    door_move_duration: float = 1.0
     door_stay_duration: float = 3.0
 
     @property

@@ -31,6 +31,12 @@ class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
         self.window = self.controller.window
         self.building = self.window.building_panel
 
+        self.controller.set_config(
+            floor_travel_duration=0.1,
+            door_stay_duration=0.1,
+            door_move_duration=0.1,
+        )
+
     elevator1: Elevator
     elevator2: Elevator
     elevator1_UI: ElevatorPanel

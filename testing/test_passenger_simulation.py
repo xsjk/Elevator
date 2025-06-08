@@ -14,11 +14,6 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         await super().asyncSetUp()
         self.passenger_msg = asyncio.Queue()
         self.message_task = asyncio.create_task(self.process_passenger_requests())
-        self.controller.set_config(
-            floor_travel_duration=0.1,
-            door_stay_duration=0.1,
-            door_move_duration=0.1,
-        )
 
     async def asyncTearDown(self):
         if self.message_task:
@@ -71,7 +66,7 @@ class PassengerSimulationTest(GUIAsyncioTestCase):
         try:
             async with asyncio.timeout(timeout):
                 await process_controller_messages()
-        except TimeoutError:
+        except asyncio.TimeoutError:
             self.fail(f"Simulation timed out after {timeout} seconds. Active passengers: {len(active)}")
 
     async def test_single_passenger_up(self):

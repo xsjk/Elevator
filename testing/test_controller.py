@@ -7,8 +7,12 @@ from common import Controller, Direction, Floor
 class TestController(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.controller = Controller()
+        self.controller.set_config(
+            floor_travel_duration=0.1,
+            door_stay_duration=0.1,
+            door_move_duration=0.1,
+        )
         await self.controller.start()
-        await asyncio.sleep(0.1)
 
     async def asyncTearDown(self):
         await self.controller.stop()
@@ -29,23 +33,23 @@ class TestController(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_cancel_call_up(self):
         task = self.controller.handle_message_task("call_up@2")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
 
         self.assertEqual(len(self.controller.elevators.requests), 1)
 
         await self.controller.handle_message("cancel_call_up@2")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
         self.assertEqual(len(self.controller.elevators.requests), 0)
         self.assertNotIn("call_up@2", self.controller.message_tasks)
 
     async def test_handle_cancel_call_down(self):
         task = self.controller.handle_message_task("call_down@3")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
 
         self.assertEqual(len(self.controller.elevators.requests), 1)
 
         await self.controller.handle_message("cancel_call_down@3")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
         self.assertEqual(len(self.controller.elevators.requests), 0)
         self.assertNotIn("call_down@3", self.controller.message_tasks)
 
@@ -56,7 +60,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
     async def test_handle_deselect_floor(self):
         # Simulate selecting and deselecting a floor without waiting for the task to complete
         self.controller.handle_message_task("select_floor@2#1")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
 
         # Ensure the floor is selected
         elevator = self.controller.elevators[1]
@@ -64,7 +68,7 @@ class TestController(unittest.IsolatedAsyncioTestCase):
 
         # Now deselect the floor
         await self.controller.handle_message("deselect_floor@2#1")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.02)
 
         # Verify the floor is deselected
         self.assertNotIn(Floor("2"), elevator.selected_floors)
