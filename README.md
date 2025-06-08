@@ -5,6 +5,7 @@ A modern multi-elevator simulation platform with async architecture, real-time G
 ## 📋 Table of Contents
 
 - [🚀 Features](#-features)
+- [📸 Screenshots](#-screenshots)
 - [🚀 Getting Started](#-getting-started)
   - [Installation](#installation)
   - [Quick Start](#quick-start)
@@ -39,6 +40,16 @@ A modern multi-elevator simulation platform with async architecture, real-time G
 - **State Machines**: Explicit elevator states (Moving Up/Down, Door Opening/Closing, Stopped)
 - **Live Animations**: Smooth 2D elevator and door animations
 - **Dynamic Configuration**: Runtime parameter updates without restart
+
+## 📸 Screenshots
+
+Here's what the Advanced Elevator Control System looks like in action:
+
+### Main Interface (Dark Theme)
+
+![Elevator Control System - Dark Theme](demo/screenshot.png)
+
+_The main interface featuring real-time elevator visualization, floor controls, and status indicators in dark theme mode._
 
 ## 🚀 Getting Started
 
