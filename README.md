@@ -63,7 +63,7 @@ _The main interface featuring real-time elevator visualization, floor controls, 
 ```shell
 # Clone and setup
 git clone https://github.com/xsjk/Elevator.git
-cd Elevator
+cd Elevator/src
 uv sync
 ```
 
