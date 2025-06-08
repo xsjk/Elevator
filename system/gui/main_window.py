@@ -100,7 +100,7 @@ class ConfigDialog(QDialog):
 
         # Door stay duration
         self.door_stay_spinbox = QDoubleSpinBox()
-        self.door_stay_spinbox.setRange(0.1, 20.0)
+        self.door_stay_spinbox.setRange(0, 20.0)
         self.door_stay_spinbox.setSingleStep(0.1)
         self.door_stay_spinbox.setDecimals(1)
         self.door_stay_spinbox.setValue(current_config.door_stay_duration)
