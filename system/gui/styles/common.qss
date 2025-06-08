@@ -105,6 +105,35 @@ QSpinBox, QDoubleSpinBox {
     min-width: 80px;
 }
 
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 22px;
+    top: 2px;
+    right: 2px;
+
+}
+
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 22px;
+    bottom: 2px;
+    right: 2px;
+}
+
+
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    width: 8px;
+    height: 8px;
+}
+
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    width: 8px;
+    height: 8px;
+}
+
+
 /* Text Areas */
 QTextEdit {
     border-radius: 10px;

@@ -79,7 +79,7 @@ QSpinBox, QDoubleSpinBox {
     border: 2px solid #555555;
     background-color: #3a3a3a;
     color: #e9ecef;
-    selection-background-color: #4dabf7;
+    selection-background-color: #834dabf7;
     selection-color: #ffffff;
 }
 
@@ -90,28 +90,6 @@ QSpinBox:focus, QDoubleSpinBox:focus {
 
 QSpinBox:hover, QDoubleSpinBox:hover {
     border-color: #74c0fc;
-}
-
-QSpinBox::up-button, QDoubleSpinBox::up-button {
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 22px;
-    border-right: 4px solid transparent;
-    border-top: 4px solid transparent;
-    border-top-right-radius: 8px;
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #4a4a4a, stop: 1 #3a3a3a);
-}
-
-QSpinBox::down-button, QDoubleSpinBox::down-button {
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 22px;
-    border-right: 4px solid transparent;
-    border-bottom: 4px solid transparent;
-    border-bottom-right-radius: 8px;
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #4a4a4a, stop: 1 #3a3a3a);
 }
 
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
@@ -126,18 +104,9 @@ QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
                                 stop: 0 #4c6ef5, stop: 1 #3b5bdb);
 }
 
-QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-    image: url(none);
-    width: 8px;
-    height: 8px;
-    background: #e9ecef;
-}
-
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow,
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-    image: url(none);
-    width: 8px;
-    height: 8px;
-    background: #e9ecef;
+    color: #2383e3;
 }
 
 QComboBox {
