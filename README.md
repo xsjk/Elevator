@@ -47,7 +47,7 @@ Here's what the Advanced Elevator Control System looks like in action:
 
 ### Main Interface (Dark Theme)
 
-![Elevator Control System - Dark Theme](demo/screenshot.png)
+![Elevator Control System - Dark Theme](docs/user_manual/screenshot.png)
 
 _The main interface featuring real-time elevator visualization, floor controls, and status indicators in dark theme mode._
 
@@ -222,25 +222,47 @@ uv run -m system --headless
 
 ```text
 Elevator/
-├── system/                       # Core Application
-│   ├── __main__.py               # Entry point
-│   ├── core/                     # Business Logic
-│   │   ├── controller.py         # Elevator dispatch
-│   │   └── elevator.py           # Elevator state machine
-│   ├── gui/                      # User Interface
-│   │   ├── main_window.py        # Main window
-│   │   ├── visualizer.py         # 2D animations
-│   │   ├── theme_manager.py      # Theme system
-│   │   └── i18n.py               # Internationalization
-│   └── utils/                    # Utilities
-│       ├── event_bus.py          # Event system
-│       └── zmq_async.py          # ZeroMQ communication
-├── testing/                      # Test Suite
-│   ├── __main__.py               # Test runner
-│   ├── server.py                 # ZMQ test server
-│   └── test_*.py                 # Unit tests
-├── config.yaml                   # Configuration
-└── README.md                     # Documentation
+├── src/
+│   ├── system/                       # Core Application
+│   │   ├── __main__.py               # Entry point
+│   │   ├── core/                     # Business Logic
+│   │   │   ├── controller.py         # Elevator dispatch
+│   │   │   └── elevator.py           # Elevator state machine
+│   │   ├── gui/                      # User Interface
+│   │   │   ├── main_window.py        # Main window
+│   │   │   ├── visualizer.py         # 2D animations
+│   │   │   ├── theme_manager.py      # Theme system
+│   │   │   └── i18n.py               # Internationalization
+│   │   └── utils/                    # Utilities
+│   │       ├── event_bus.py          # Event system
+│   │       └── zmq_async.py          # ZeroMQ communication
+│   ├── testing/                      # Test Suite
+│   │   ├── __main__.py               # Test runner
+│   │   ├── server.py                 # ZMQ test server
+│   │   └── test_*.py                 # Unit tests
+│   └── model_checking/               # UPPAAL Model Checking
+│       ├── elevator.xml              # Elevator model
+│       └── sub_user.xml              # User model
+├── docs/                             # Documentation
+│   ├── user_manual/                  # User Manual
+|   |   ├── user_manual.md            # Markdown version
+│   │   └── user_manual.pdf           # PDF version
+│   ├── requirement/                  # Requirements
+│   │   ├── requirements.md           # Markdown version
+│   │   └── requirements.pdf          # PDF version
+│   ├── specification/                # Specification
+│   │   ├── specification.md          # Markdown version
+│   │   └── specification.pdf         # PDF version
+│   ├── validation/                   # Validation
+│   │   ├── validation.md             # Markdown version
+│   │   └── validation.pdf            # PDF version
+│   └── traceability/                 # Traceability
+│       ├── traceability.md           # Markdown version
+│       └── traceability.pdf          # PDF version
+├── README.md                         # Project Overview
+├── LICENSE                           # Project License
+├── pyproject.toml                    # Project Metadata
+└── uv.lock                           # Dependency Lockfile
 ```
 
 ## 🔧 Configuration Reference
@@ -297,4 +319,3 @@ This project is licensed under the MIT License.
 [📚 Documentation](./docs/) • [🐛 Report Bug](./issues/) • [💡 Request Feature](./issues/) •
 
 </div>
-```
