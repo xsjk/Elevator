@@ -1,6 +1,8 @@
 import logging
+import os
 
 from qtpy.QtCore import QCoreApplication, Qt
+from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -178,6 +180,9 @@ class MainWindow(QMainWindow):
     def __init__(self, elevator_controller: Controller):
         super().__init__()
         self.setGeometry(100, 100, 1200, 800)
+
+        # Set window icon
+        self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "assets", "elevator_icon.png")))
 
         # Initialize translation and theme managers
         global translation_manager, theme_manager

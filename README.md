@@ -5,6 +5,7 @@ A modern multi-elevator simulation platform with async architecture, real-time G
 ## 📋 Table of Contents
 
 - [🚀 Features](#-features)
+- [📸 Screenshots](#-screenshots)
 - [🚀 Getting Started](#-getting-started)
   - [Installation](#installation)
   - [Quick Start](#quick-start)
@@ -39,6 +40,16 @@ A modern multi-elevator simulation platform with async architecture, real-time G
 - **State Machines**: Explicit elevator states (Moving Up/Down, Door Opening/Closing, Stopped)
 - **Live Animations**: Smooth 2D elevator and door animations
 - **Dynamic Configuration**: Runtime parameter updates without restart
+
+## 📸 Screenshots
+
+Here's what the Advanced Elevator Control System looks like in action:
+
+### Main Interface (Dark Theme)
+
+![Elevator Control System - Dark Theme](demo/screenshot.png)
+
+_The main interface featuring real-time elevator visualization, floor controls, and status indicators in dark theme mode._
 
 ## 🚀 Getting Started
 
@@ -80,7 +91,7 @@ Launch the full graphical interface with real-time elevator visualization:
 uv run -m system
 
 # Custom configuration
-uv run -m system --num-elevators 4 --num-floors 10
+uv run -m system --num-elevators 4
 
 # Debug mode with faster timing
 uv run -m system --floor-travel-duration 0.5 --log-level DEBUG
@@ -103,7 +114,7 @@ Run core elevator logic without GUI for testing and automation:
 uv run -m system --headless
 
 # Production-like configuration
-uv run -m system --headless --num-elevators 8 --num-floors 30
+uv run -m system --headless --num-elevators 8
 ```
 
 **Use Cases:**
@@ -197,26 +208,12 @@ uv run -m system --headless
   - `down_floor_2_arrived#2` - Elevator #2 arrived at floor 2 going down
   - `floor_1_arrived#1` - Elevator #1 stopped at floor 1
 
-### External Testing
-
-Compatible with CS132 test cases:
-
-```shell
-# Method 1: Built-in test server
-uv run -m testing.server
-
-# Terminal 2: Run system (GUI or headless)
-uv run -m system --headless
-```
-
 **Available Parameters:**
 
 - Elevators: `#1`, `#2`
 - Floors: `-1` (basement), `1`, `2`, `3`
 - Call up floors: `-1`, `1`, `2`
 - Call down floors: `3`, `2`, `1`
-
-## 🏗️ System Architecture
 
 ## 📁 Project Structure
 
@@ -254,7 +251,6 @@ Elevator/
 | `--headless`              | flag   | false   | Run without GUI interface                             |
 | `--log-level`             | string | INFO    | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `--num-elevators`         | int    | 2       | Number of elevators in the building                   |
-| `--num-floors`            | int    | 5       | Number of floors in the building                      |
 | `--floor-travel-duration` | float  | 3.0     | Time (seconds) for elevator to travel between floors  |
 | `--door-move-duration`    | float  | 1.0     | Time (seconds) for door to open/close                 |
 | `--door-stay-duration`    | float  | 3.0     | Time (seconds) door stays open                        |
@@ -266,44 +262,6 @@ Elevator/
 | `--all`         | flag | false   | Run all tests without interactive selection |
 | `--tests`       | list | []      | Specific test files to run                  |
 | `--max-workers` | int  | 16      | Maximum concurrent test processes           |
-
-### Usage Examples
-
-#### Development Scenarios
-
-```shell
-# Minimal development setup
-uv run -m system --num-elevators 1 --num-floors 3 --log-level DEBUG
-
-# Fast simulation for testing
-uv run -m system --floor-travel-duration 0.5 --door-move-duration 0.2 --door-stay-duration 1.0
-
-# Large-scale performance testing
-uv run -m system --num-elevators 8 --num-floors 30 --headless
-```
-
-#### Testing Scenarios
-
-```shell
-# Specific test suites
-uv run -m testing --tests test_controller.py test_elevator.py
-
-# Integration testing with limited concurrency
-uv run -m testing --tests test_integration_1.py test_integration_2.py --max-workers 4
-
-# Full CI/CD test run
-uv run -m testing --all --max-workers 8
-```
-
-#### Network Testing
-
-```shell
-# Terminal 1: Start ZeroMQ server
-uv run -m testing.server
-
-# Terminal 2: Connect system with custom settings
-uv run -m system --headless --num-elevators 4 --log-level INFO
-```
 
 ### Elevator States
 
