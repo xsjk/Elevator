@@ -19,7 +19,7 @@ class ElevatorUITest(GUIAsyncioTestCase):
         self.assertIn("开", self.elevator1_UI.door_label.text())
 
         await asyncio.sleep(self.elevator1.door_move_duration * 2 + self.elevator1.door_stay_duration)
-        await asyncio.sleep(0.02)
+        await asyncio.sleep(self.elevator1.door_move_duration / 2)
         self.assertFalse(self.elevator1.state.is_door_open())
         self.assertIn("关", self.elevator1_UI.door_label.text())
 

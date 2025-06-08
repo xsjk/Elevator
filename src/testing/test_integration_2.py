@@ -34,13 +34,12 @@ class ElevatorTest(GUIAsyncioTestCase):
         await asyncio.sleep(0.02)
 
         await asyncio.sleep(cfg.door_move_duration / 2)
-        await asyncio.sleep(0.02)
+        await asyncio.sleep(cfg.door_stay_duration / 2)
         self.assertEqual(self.elevator1.state, ElevatorState.STOPPED_DOOR_OPENED)
         self.assertEqual(self.elevator2.state, ElevatorState.STOPPED_DOOR_CLOSED)
 
         # Step 3: press floor -1, then floor 3
         self.elevator1_UI.floor_buttons["-1"].click()
-        await asyncio.sleep(0.02)
         self.elevator1_UI.floor_buttons["3"].click()
         await asyncio.sleep(0.02)
 
