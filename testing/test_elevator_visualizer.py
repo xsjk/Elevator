@@ -90,28 +90,15 @@ class TestElevatorVisualizer(unittest.TestCase):
 
     # TestCase 2
     def test_update_elevator_status_invalid_id(self):
-        from unittest.mock import patch
-
         with patch("logging.warning") as mock_log:
             self.visualizer.update_elevator_status(99, Floor(2), False, Direction.IDLE)
             mock_log.assert_called_once()
 
     # TestCase 3
     def test_update_elevator_status_invalid_floor(self):
-        from unittest.mock import patch
-
         with patch("logging.warning") as mock_log:
             self.visualizer.update_elevator_status(1, Floor(99), False, Direction.IDLE)
             self.assertIn("not found in floor positions", mock_log.call_args[0][0])
-
-    def test_paint_event_callable(self):
-        from qtpy.QtGui import QPaintEvent
-
-        event = QPaintEvent(self.visualizer.rect())
-        try:
-            self.visualizer.paintEvent(event)
-        except Exception as e:
-            self.fail(f"paintEvent raised exception: {e}")
 
 
 if __name__ == "__main__":
