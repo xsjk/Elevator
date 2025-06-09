@@ -8,17 +8,61 @@ from qtpy.QtCore import QTranslator
 from qtpy.QtCore import QCoreApplication
 
 
+def get_lrelease_path():
+    """Find lrelease executable automatically"""
+    # Check environment variable first
+    env_path = os.environ.get("LRELEASE_PATH")
+    if env_path and os.path.exists(env_path):
+        logging.debug(f"Using lrelease from environment variable: {env_path}")
+        return env_path
+
+    # Try to find lrelease or pyside6-lrelease
+    lrelease_names = ["lrelease", "pyside6-lrelease"]
+    if sys.platform == "win32":
+        lrelease_names = ["lrelease.exe", "pyside6-lrelease.exe"]
+
+    for lrelease_name in lrelease_names:
+        # Check in Python Scripts directory
+        python_scripts = os.path.join(sys.prefix, "Scripts")
+        lrelease_path = os.path.join(python_scripts, lrelease_name)
+        if os.path.exists(lrelease_path):
+            logging.debug(f"Found {lrelease_name} at: {lrelease_path}")
+            return lrelease_path
+
+        # Check in system PATH
+        try:
+            result = subprocess.run(["where" if sys.platform == "win32" else "which", lrelease_name], capture_output=True, text=True)
+            if result.returncode == 0:
+                path = result.stdout.strip().split("\n")[0]
+                logging.debug(f"Found {lrelease_name} in PATH: {path}")
+                return path
+        except Exception:
+            continue
+
+    logging.warning("lrelease not found. Install PySide6 to get pyside6-lrelease.")
+    return None
+
+
 class TranslationManager:
     """
     Translation manager for the elevator control system
     Uses Qt's translation mechanism with .qm files
     """
 
-    def __init__(self, app: QCoreApplication, default_language: str = "中文"):
-        """Initialize the translation manager"""
+    def __init__(self, app: QCoreApplication, default_language: str = "中文", lrelease_path: str | None = None):
+        """Initialize the translation manager
+
+        Args:
+            app: Qt application instance
+            default_language: Default language for the interface
+            lrelease_path: Custom path to lrelease executable (optional)
+        """
         self.app = app
         self.translator = QTranslator()
         self.observers = []
+        if lrelease_path is None:
+            lrelease_path = get_lrelease_path()
+        self.lrelease_path = lrelease_path
 
         # Map for detected languages (will be populated in scan_available_languages)
         self.language_to_locale = {}
@@ -145,53 +189,39 @@ class TranslationManager:
         self.update_qm_files()
 
         # Scan for available languages
-        self.scan_available_languages()
-
-        # Try to load default language
+        self.scan_available_languages()  # Try to load default language
         if self.available_languages:
             self.set_language(self.default_language)
         else:
             logging.warning("No language translations available")
 
     def update_qm_files(self):
-        """Ensure .qm files are up-to-date by generating them from .ts files using pyside6-lrelease"""
+        """Ensure .qm files are up-to-date by generating them from .ts files using lrelease"""
         translations_dir = os.path.join(os.path.dirname(__file__), "translations")
 
         # Ensure the directory exists
         os.makedirs(translations_dir, exist_ok=True)
 
-        # Check for pyside6-lrelease executable
-        lrelease = "pyside6-lrelease"
-        if sys.platform == "win32":
-            lrelease = "pyside6-lrelease.exe"
-
-            # Try to find pyside6-lrelease in Scripts directory
-            python_scripts = os.path.join(sys.prefix, "Scripts")
-            lrelease_path = os.path.join(python_scripts, lrelease)
-
-            if os.path.exists(lrelease_path):
-                lrelease = lrelease_path
-                logging.debug(f"Found pyside6-lrelease at: {lrelease}")
-            else:
-                logging.warning("pyside6-lrelease not found in Scripts directory, trying system PATH")
+        # Check if lrelease is available
+        if not self.lrelease_path:
+            logging.warning("lrelease not found. Translation files will not be updated automatically.")
+            return
 
         # Process all .ts files in the translations directory
         for filename in os.listdir(translations_dir):
             if filename.endswith(".ts"):
                 ts_file = os.path.join(translations_dir, filename)
-                qm_file = os.path.join(translations_dir, filename.replace(".ts", ".qm"))
-
-                # Check if .qm file needs updating (doesn't exist or older than .ts)
+                qm_file = os.path.join(translations_dir, filename.replace(".ts", ".qm"))  # Check if .qm file needs updating (doesn't exist or older than .ts)
                 if not os.path.exists(qm_file) or os.path.getmtime(ts_file) > os.path.getmtime(qm_file):
                     logging.debug(f"Generating {qm_file} from {ts_file}")
 
                     try:
-                        # Run pyside6-lrelease to generate .qm file
-                        result = subprocess.run([lrelease, ts_file, "-qm", qm_file], capture_output=True, text=True)
+                        # Run lrelease to generate .qm file
+                        result = subprocess.run([self.lrelease_path, ts_file, "-qm", qm_file], capture_output=True, text=True)
 
                         if result.returncode == 0:
                             logging.debug(f"Successfully generated {qm_file}")
                         else:
                             logging.error(f"Error generating .qm file: {result.stderr}")
                     except Exception as e:
-                        logging.error(f"Failed to run pyside6-lrelease: {str(e)}")
+                        logging.error(f"Failed to run lrelease: {str(e)}")

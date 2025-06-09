@@ -15,29 +15,25 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         # User clicks open door
         self.elevator1_UI.open_door_button.click()
         self.elevator2_UI.open_door_button.click()
-        await asyncio.sleep(0.02)  # Give the elevator state machine time to react
-
-        # Check if the door is open
+        await asyncio.sleep(0.02)  # Give the elevator state machine time to react        # Check if the door is open
         self.assertTrue(self.elevator1.state.is_door_open())
         self.assertTrue(self.elevator2.state.is_door_open())
-        self.assertIn("开", self.elevator1_UI.door_label.text())
-        self.assertIn("开", self.elevator2_UI.door_label.text())
+        self.assertIn("Open", self.elevator1_UI.door_label.text())
+        self.assertIn("Open", self.elevator2_UI.door_label.text())
 
         await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration * 2)
         await asyncio.sleep(0.02)
         self.assertFalse(self.elevator1.state.is_door_open())
         self.assertFalse(self.elevator2.state.is_door_open())
-        self.assertIn("关", self.elevator1_UI.door_label.text())
-        self.assertIn("关", self.elevator2_UI.door_label.text())
+        self.assertIn("Closed", self.elevator1_UI.door_label.text())
+        self.assertIn("Closed", self.elevator2_UI.door_label.text())
 
-    async def test_open_door_after_close_button(self):
-        # User clicks open door
+    async def test_open_door_after_close_button(self):  # User clicks open door
         self.elevator1_UI.open_door_button.click()
         await asyncio.sleep(0.02)  # Give the elevator state machine time to react
-
         # Check if the door is open
         self.assertTrue(self.elevator1.state.is_door_open())
-        self.assertIn("开", self.elevator1_UI.door_label.text())
+        self.assertIn("Open", self.elevator1_UI.door_label.text())
 
         await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration)
         await asyncio.sleep(0.02)
@@ -52,14 +48,11 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
         self.building.down_buttons["2"].click()
         await asyncio.sleep(0.02)
         await asyncio.sleep(self.controller.config.floor_travel_duration)
-        await asyncio.sleep(0.02)
-
-        # Assert elevator has arrived at floor 2
+        await asyncio.sleep(0.02)  # Assert elevator has arrived at floor 2
         self.assertEqual(self.elevator1.current_floor, Floor("2"))
-
         # Door should open automatically
         self.assertEqual(self.elevator1.state, ElevatorState.OPENING_DOOR)
-        self.assertIn("开", self.elevator1_UI.door_label.text())
+        self.assertIn("Open", self.elevator1_UI.door_label.text())
         await asyncio.sleep(0.02)
         await asyncio.sleep(self.controller.config.door_stay_duration + self.controller.config.door_move_duration)
         # Door should close automatically after stay duration
@@ -229,21 +222,18 @@ class SystemTestOpenDoor(GUIAsyncioTestCase):
 
         for _ in range(steps):
             state = self.controller.elevators[1].state
-            current_floor = self.controller.elevators[1].current_floor
-
-            # UC6-b: Current floor display update
+            current_floor = self.controller.elevators[1].current_floor  # UC6-b: Current floor display update
             self.assertIn(str(current_floor), self.elevator1_UI.floor_label.text())
-
             # UC6-c: Door should be closed
             if state.is_moving():
-                self.assertIn("关", self.elevator1_UI.door_label.text())
+                self.assertIn("Closed", self.elevator1_UI.door_label.text())
 
                 # UC6-d: Display direction (UP / DOWN)
                 dir_text = self.elevator1_UI.direction_label.text()
-                self.assertIn("上", dir_text.upper())
+                self.assertIn("UP", dir_text.upper())
             else:
                 dir_text = self.elevator1_UI.direction_label.text()
-                self.assertIn("空闲", dir_text.upper())
+                self.assertIn("IDLE", dir_text.upper())
 
             await asyncio.sleep(sample_interval)
 

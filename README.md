@@ -67,6 +67,15 @@ cd Elevator/src
 uv sync
 ```
 
+**Multi-language Support:**
+
+The system uses `lrelease` to compile translation files. If you don't have your own `lrelease` tool, the simplest solution is to install PySide6 instead of PyQt6:
+
+```shell
+uv remove pyqt6
+uv add pyside6
+```
+
 ### Quick Start
 
 ```shell
@@ -279,6 +288,7 @@ Elevator/
 | `--floor-travel-duration` | float  | 3.0     | Time (seconds) for elevator to travel between floors  |
 | `--door-move-duration`    | float  | 1.0     | Time (seconds) for door to open/close                 |
 | `--door-stay-duration`    | float  | 3.0     | Time (seconds) door stays open                        |
+| `--lrelease-path`         | string | None    | Path to custom lrelease executable for translations   |
 
 #### Testing Framework (`uv run -m testing`)
 

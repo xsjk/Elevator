@@ -31,6 +31,11 @@ class GUIAsyncioTestCase(unittest.IsolatedAsyncioTestCase):
         self.window = self.controller.window
         self.building = self.window.building_panel
 
+        # Force English language for testing - must be after controller.start()
+        from system.gui.main_window import translation_manager
+
+        translation_manager.set_language("English")
+
         self.controller.set_config(
             floor_travel_duration=0.2,
             door_stay_duration=0.1,

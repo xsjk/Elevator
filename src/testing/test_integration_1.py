@@ -16,12 +16,12 @@ class ElevatorUITest(GUIAsyncioTestCase):
 
         await asyncio.sleep(0.02)
         self.assertTrue(self.elevator1.state.is_door_open())  # Door is opening or opened
-        self.assertIn("开", self.elevator1_UI.door_label.text())
+        self.assertIn("Open", self.elevator1_UI.door_label.text())
 
         await asyncio.sleep(self.elevator1.door_move_duration * 2 + self.elevator1.door_stay_duration)
         await asyncio.sleep(self.elevator1.door_move_duration / 2)
         self.assertFalse(self.elevator1.state.is_door_open())
-        self.assertIn("关", self.elevator1_UI.door_label.text())
+        self.assertIn("Closed", self.elevator1_UI.door_label.text())
 
     async def test_close_door_button(self):
         """Test the internal close door button of Elevator 1."""
