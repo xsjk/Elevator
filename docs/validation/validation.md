@@ -2471,19 +2471,19 @@ The full UPPAAL model consisting of 3 parts: the elevator, the elevator door, an
 
 #### Elevator
 
-<img src="pics/Elevator.png" />
+<img src="pics/elevator.png" />
 This model simulates the whole elevator logic in our elevator development code. Here, Floor 0 means Floor -1.
 
 #### Elevator Door
 
-<img src="pics/Elevator door.png" />
+<img src="pics/elevator_door.png" />
 This model simulates all the states of elevator doors. It will opens door when receving "open_door" request if valid.
 
 ### Environment model
 
 #### User
 
-<img src="pics/User.png" />
+<img src="pics/user.png" />
 
 This model simulates the whole process of user actions, from elevator calling to floor selecting. Here, to avoid always in "opening door" state while checking, the "open door" action is deleted when the user inside the elevator.
 
@@ -2519,7 +2519,7 @@ When checking this property, only one User. I think number of users doesn't infl
 
 In order to make up for the fact that in the modeling of the User Model, users cannot press the door opening button in the Inside state, this module has been specifically tested here.
 
-<img src="pics/User_sub.png" width = 400/>
+<img src="pics/user_sub.png" width = 400/>
 
 ### Query 4
 
